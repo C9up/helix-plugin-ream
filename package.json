@@ -1,0 +1,66 @@
+{
+  "name": "@c9up/helix-plugin-ream",
+  "version": "0.1.0",
+  "description": "Helix plugin for Ream — boots a Ream app under test and injects a TestClient on the test context",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./runner": {
+      "types": "./src/runTests.ts",
+      "import": "./src/runTests.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "lint": "biome check src/",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@c9up/helix": "^0.1.9",
+    "@c9up/ream": "^0.1.27"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.10",
+    "@c9up/helix": "^0.1.9",
+    "@c9up/ream": "^0.1.27",
+    "@types/node": "^22.19.15",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "src",
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.js"
+      },
+      "./runner": {
+        "types": "./dist/runTests.d.ts",
+        "import": "./dist/runTests.js"
+      }
+    },
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/C9up/helix-plugin-ream.git"
+  }
+}
