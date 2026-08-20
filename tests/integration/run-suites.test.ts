@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { fileURLToPath, pathToFileURL } from 'node:url'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { runTests } from '../../src/runTests.js'
 
@@ -12,7 +12,11 @@ import { runTests } from '../../src/runTests.js'
  * execute there.
  */
 const here = dirname(fileURLToPath(import.meta.url))
-const runtimeEntry = pathToFileURL(join(here, '../../../helix/src/runtime/index.ts')).href
+// The generated specs live in a temp dir, so they cannot resolve `@c9up/helix`
+// by name — they need an absolute URL. Resolving the package here gives one
+// that holds wherever helix comes from: the workspace sources or the published
+// dist. A path relative to this file only ever worked inside the monorepo.
+const runtimeEntry = import.meta.resolve('@c9up/helix')
 
 const dirs: string[] = []
 let root: string
