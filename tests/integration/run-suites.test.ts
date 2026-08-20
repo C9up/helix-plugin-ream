@@ -32,13 +32,14 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-/** The tsx loader from the workspace store, so the spawned workers read TS. */
+/**
+ * The tsx loader, so the spawned workers read TS. Resolved through the package
+ * itself (tsx exports `.` as dist/loader.mjs) rather than by walking up to a
+ * pnpm store — the layout differs between this repo and a workspace checkout.
+ */
 function nodeArgs(): string[] {
-  const store = join(here, '../../../../node_modules/.pnpm')
   try {
-    const entry = readdirSync(store).find((name) => name.startsWith('tsx@'))
-    if (entry === undefined) return []
-    return ['--import', `file://${join(store, entry, 'node_modules/tsx/dist/loader.mjs')}`]
+    return ['--import', import.meta.resolve('tsx')]
   } catch {
     return []
   }

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -22,13 +22,14 @@ afterEach(() => {
   for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
 
-/** The tsx loader from the workspace store — the same one the CLI resolves. */
+/**
+ * The tsx loader. Resolved through the package itself (tsx exports `.` as
+ * dist/loader.mjs) — walking up to a pnpm store only works in a workspace
+ * checkout, not in this repo on its own.
+ */
 function tsxLoader(): string | undefined {
-  const store = join(here, '../../../../node_modules/.pnpm')
   try {
-    const entry = readdirSync(store).find((name) => name.startsWith('tsx@'))
-    if (entry === undefined) return undefined
-    return `file://${join(store, entry, 'node_modules/tsx/dist/loader.mjs')}`
+    return import.meta.resolve('tsx')
   } catch {
     return undefined
   }
