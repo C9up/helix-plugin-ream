@@ -100,11 +100,7 @@ export function workerNodeArgs(
 	tests: TestsConfig | undefined,
 	options: RunTestsOptions,
 ): string[] {
-	const args = [...(options.nodeArgs ?? process.execArgv)];
-	if (tests?.japaPlugins === true) {
-		args.push("--import", import.meta.resolve("@c9up/helix/japa-alias"));
-	}
-	return args;
+	return [...(options.nodeArgs ?? process.execArgv)];
 }
 
 /** The suites to run, in declaration order, for the given selection. */
@@ -192,9 +188,7 @@ export async function runTests(
 	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
 	// them — Japa's semantics, and the difference between migrating once and
 	// migrating once per test file.
-	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap, {
-		japaPlugins: tests?.japaPlugins === true,
-	});
+	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap);
 
 	// No suites declared: run whatever the project's discovery finds, so an app
 	// with a plain `tests/` directory works without declaring anything.
