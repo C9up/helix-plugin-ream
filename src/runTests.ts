@@ -195,7 +195,7 @@ export async function runTests(
 	if (selected.length === 0) {
 		try {
 			const outcome = await helix.run(base);
-			return finish(outcome.exitCode, forceExit);
+			return finish(outcome.exitCode, forceExit, helix.armDrainGuard);
 		} finally {
 			await dropGlobalHooks();
 		}
@@ -229,12 +229,12 @@ export async function runTests(
 	}
 	if (steps.length === 0) {
 		await dropGlobalHooks();
-		return finish(0, forceExit);
+		return finish(0, forceExit, helix.armDrainGuard);
 	}
 
 	try {
 		const outcome = await helix.runSuites(steps, base);
-		return finish(outcome.exitCode, forceExit);
+		return finish(outcome.exitCode, forceExit, helix.armDrainGuard);
 	} finally {
 		await dropGlobalHooks();
 	}
@@ -246,11 +246,22 @@ export async function runTests(
  * the whole point is to not wait for the event loop to drain. A run that
  * force-exits never returns here; the value is for every other run.
  */
-function finish(code: number, forceExit: boolean): number {
+function finish(
+	code: number,
+	forceExit: boolean,
+	armDrainGuard: (code: number) => void,
+): number {
 	if (forceExit) {
 		process.exitCode = code;
 		process.exit();
 	}
+	// Without forceExit the loop is left to drain on its own, which is the right
+	// default — a leaked handle should be visible, not swallowed. But visible has
+	// to mean SAID: `ream test` used to print its summary and then hang with no
+	// further output, and under a CI timeout that is a non-zero exit for a run in
+	// which every test passed. helix's own CLI already said so; this entry point
+	// did not, and it is the one `ream test` goes through.
+	armDrainGuard(code);
 	return code;
 }
 

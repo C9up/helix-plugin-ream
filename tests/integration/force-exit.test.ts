@@ -44,7 +44,7 @@ function tsxLoader(): string | undefined {
 function runChild(
 	forceExit: boolean,
 	timeoutMs: number,
-): Promise<{ exited: boolean; code: number | null }> {
+): Promise<{ exited: boolean; code: number | null; stderr: string }> {
 	const root = mkdtempSync(join(tmpdir(), "ream-forceexit-"));
 	dirs.push(root);
 
@@ -63,18 +63,23 @@ function runChild(
 		process.execPath,
 		[...args, "--input-type=module", "-e", script],
 		{
-			stdio: ["ignore", "ignore", "ignore"],
+			stdio: ["ignore", "ignore", "pipe"],
 		},
 	);
+
+	let stderr = "";
+	child.stderr?.on("data", (chunk: Buffer) => {
+		stderr += chunk.toString();
+	});
 
 	return new Promise((resolve) => {
 		const timer = setTimeout(() => {
 			child.kill("SIGKILL");
-			resolve({ exited: false, code: null });
+			resolve({ exited: false, code: null, stderr });
 		}, timeoutMs);
 		child.on("exit", (code) => {
 			clearTimeout(timer);
-			resolve({ exited: true, code });
+			resolve({ exited: true, code, stderr });
 		});
 	});
 }
@@ -90,11 +95,19 @@ describe("tests.forceExit", () => {
 		expect(outcome.code).toBe(0);
 	}, 60_000);
 
-	it("without it, the open handle keeps the process alive", async () => {
-		// The contrast is the point: if this one also exited, the test above would
-		// pass for a reason that has nothing to do with forceExit.
-		const outcome = await runChild(false, 6_000);
+	it("without it, the open handle is REPORTED before the process gives up", async () => {
+		// The contrast with the case above is still the point, but it is no longer
+		// "one exits and one hangs". Hanging silently after a green summary reads
+		// as a crash, and under a CI timeout it is scored as a failure. So the run
+		// is left to drain — that is what makes a leaked handle visible — and when
+		// it cannot, the guard says what is still open and exits.
+		const outcome = await runChild(false, 20_000);
 
-		expect(outcome.exited).toBe(false);
-	}, 30_000);
+		expect(outcome.exited).toBe(true);
+		expect(outcome.stderr).toContain("the process is still alive");
+		// The way out has to be in the message, next to the diagnosis.
+		expect(outcome.stderr).toContain("forceExit");
+		// And it names the handle nothing closed — a Timeout, here.
+		expect(outcome.stderr).toMatch(/still open: .*Timeout/);
+	}, 40_000);
 });

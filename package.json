@@ -1,6 +1,6 @@
 {
   "name": "@c9up/helix-plugin-ream",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Helix plugin for Ream \u2014 boots a Ream app under test and injects a TestClient on the test context",
   "license": "MIT",
   "type": "module",
@@ -24,12 +24,12 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "@c9up/helix": "^0.2.0",
+    "@c9up/helix": "^0.2.3",
     "@c9up/ream": "^0.2.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
-    "@c9up/helix": "^0.2.0",
+    "@c9up/helix": "^0.2.3",
     "@c9up/ream": "^0.2.0",
     "@types/node": "^22.19.15",
     "tsx": "^4",
