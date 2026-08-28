@@ -2,7 +2,7 @@
 
 The bridge between [Ream](https://github.com/C9up/ream) and [helix](https://github.com/C9up/helix), its test runner.
 
-Ream knows nothing about helix, helix knows nothing about Ream. The plugin that joins them lives here and declares both sides as peers — the same shape as `@japa/plugin-adonisjs`.
+Ream knows nothing about helix, helix knows nothing about Ream. The plugin that joins them lives here and declares both sides as peers — the same shape AdonisJS uses to join its own runner to the framework.
 
 ## Install
 
