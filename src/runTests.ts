@@ -3,7 +3,7 @@
  *
  * The AdonisJS stratification, kept intact: the FRAMEWORK reads its rc file and
  * hands the suites to the runner, exactly as `@adonisjs/core` reads
- * `adonisrc.ts` and hands them to Japa. The runner itself (helix) knows nothing
+ * `adonisrc.ts` and hands them to helix. The runner itself (helix) knows nothing
  * about ream, and ream owns no test execution — it only translates.
  *
  *     // bin/test.ts
@@ -16,7 +16,7 @@
  * to be re-imported in each worker, so the runner needs the module's PATH, not
  * just the object it exported. `runTests` takes it as `configModule`, and
  * REFUSES to run when a suite declares a callback it was given no way to
- * deliver — in Japa a declared `configure` runs, so a run that skipped it would
+ * deliver — in helix a declared `configure` runs, so a run that skipped it would
  * be green in a state its own config does not describe.
  */
 
@@ -71,7 +71,7 @@ export class UnknownSuiteError extends Error {
 /**
  * A suite declares `configure`, but this entry point cannot deliver it.
  *
- * Not a warning: Japa runs a declared `configure`, so carrying on would run the
+ * Not a warning: helix runs a declared `configure`, so carrying on would run the
  * suite in a state its own config does not describe — and a warning is exactly
  * what gets scrolled past in CI.
  */
@@ -91,7 +91,7 @@ export class SuiteConfigureUnreachableError extends Error {
 /**
  * The flags the worker processes are spawned with.
  *
- * Split out because it is a decision, not plumbing: the Japa alias loader
+ * Split out because it is a decision, not plumbing: the helix alias loader
  * redirects a package specifier, so it goes in only when a project asks. It
  * rides ALONGSIDE whatever loader is already there — the test files still need
  * theirs to read TypeScript.
@@ -162,7 +162,7 @@ export async function runTests(
 		(suite) => typeof suite.configure === "function",
 	);
 	if (configuring.length > 0 && options.configModule === undefined) {
-		// In Japa a declared `configure` RUNS. It cannot here — the callback needs
+		// In helix a declared `configure` RUNS. It cannot here — the callback needs
 		// the module's path to be re-imported in each worker, and this entry was
 		// handed the exported object. Running anyway would produce a green suite
 		// configured differently from what the rc file says, so the run stops.
@@ -186,7 +186,7 @@ export async function runTests(
 	};
 
 	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
-	// them — Japa's semantics, and the difference between migrating once and
+	// them — helix's semantics, and the difference between migrating once and
 	// migrating once per test file.
 	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap);
 
@@ -241,7 +241,7 @@ export async function runTests(
 }
 
 /**
- * Apply `tests.forceExit`. Japa does this inside its own run — sets the exit
+ * Apply `tests.forceExit`. helix does this inside its own run — sets the exit
  * code, then `process.exit()` — rather than leaving it to the caller, because
  * the whole point is to not wait for the event loop to drain. A run that
  * force-exits never returns here; the value is for every other run.

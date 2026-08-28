@@ -1,5 +1,5 @@
 /**
- * The `apiClient()` helix plugin (Japa `@japa/api-client` parity): calling the
+ * The `apiClient()` helix plugin (helix `helix` parity): calling the
  * plugin registers a BOOTED TestClient on the context as `client`. Exercised
  * against a trivial Node server via a mock PluginApi (no helix runtime needed).
  */
@@ -57,7 +57,7 @@ describe("helix plugin > apiClient()", () => {
 
 		if (!registered) throw new Error("apiClient did not register a `client`");
 
-		// Unified builder: the verb shortcut carries the japa assertion surface AND
+		// Unified builder: the verb shortcut carries the helix assertion surface AND
 		// is awaitable — `await client.get('/x').assertOk()` (the documented form).
 		await registered.get("/health").assertOk().assertBody({ ok: true });
 		await registered.get("/missing").assertNotFound();
@@ -66,11 +66,11 @@ describe("helix plugin > apiClient()", () => {
 		const res = await registered.get("/health");
 		expect(res.status()).toBe(200);
 		expect(res.json()).toEqual({ ok: true });
-		// Japa accessor surface on the awaited response.
+		// helix accessor surface on the awaited response.
 		expect(res.header("content-type")).toContain("application/json");
 		expect(res.assertOk().text()).toBe('{"ok":true}');
 
-		// F8: `client.request(url, method)` — Japa arg order (URL first, method
+		// F8: `client.request(url, method)` — helix arg order (URL first, method
 		// second, defaulting to GET). Returns the same rich awaitable builder.
 		await registered.request("/health").assertOk();
 		await registered.request("/health", "GET").assertBody({ ok: true });
