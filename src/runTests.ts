@@ -91,15 +91,10 @@ export class SuiteConfigureUnreachableError extends Error {
 /**
  * The flags the worker processes are spawned with.
  *
- * Split out because it is a decision, not plumbing: the helix alias loader
- * redirects a package specifier, so it goes in only when a project asks. It
- * rides ALONGSIDE whatever loader is already there — the test files still need
- * theirs to read TypeScript.
+ * A project's own flags win; otherwise the workers inherit this process's, so
+ * the loader that lets the test files be read as TypeScript carries over.
  */
-export function workerNodeArgs(
-	tests: TestsConfig | undefined,
-	options: RunTestsOptions,
-): string[] {
+export function workerNodeArgs(options: RunTestsOptions): string[] {
 	return [...(options.nodeArgs ?? process.execArgv)];
 }
 
@@ -178,7 +173,7 @@ export async function runTests(
 
 	const base = {
 		root,
-		nodeArgs: workerNodeArgs(tests, options),
+		nodeArgs: workerNodeArgs(options),
 		threads: options.threads,
 		timeoutMs: tests?.timeout,
 		reporters: options.reporters,

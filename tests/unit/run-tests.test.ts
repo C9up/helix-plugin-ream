@@ -213,16 +213,13 @@ describe("workerNodeArgs", () => {
 	it("keeps the loader the workers already needed", () => {
 		// Replacing it instead of passing it through would leave them unable to
 		// read TypeScript, which every fixture in a ream app is.
-		const args = workerNodeArgs(
-			{ suites: [] },
-			{ nodeArgs: ["--import", "tsx-loader"] },
-		);
+		const args = workerNodeArgs({ nodeArgs: ["--import", "tsx-loader"] });
 
 		expect(args).toEqual(["--import", "tsx-loader"]);
 	});
 
 	it("inherits this process's own flags when none are given", () => {
-		expect(workerNodeArgs(undefined, {})).toEqual(process.execArgv);
+		expect(workerNodeArgs({})).toEqual(process.execArgv);
 	});
 });
 
