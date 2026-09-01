@@ -44,6 +44,7 @@ function tsxLoader(): string | undefined {
 function runChild(
 	forceExit: boolean,
 	timeoutMs: number,
+	drainGuard = true,
 ): Promise<{ exited: boolean; code: number | null; stderr: string }> {
 	const root = mkdtempSync(join(tmpdir(), "ream-forceexit-"));
 	dirs.push(root);
@@ -52,7 +53,7 @@ function runChild(
 		`import { runTests } from ${JSON.stringify(runTestsPath)}`,
 		// A handle nothing closes — a DB pool or a server, in a real app.
 		`const handle = setInterval(() => {}, 1000)`,
-		`await runTests({ suites: [], forceExit: ${forceExit} }, { root: ${JSON.stringify(root)} })`,
+		`await runTests({ suites: [], forceExit: ${forceExit} }, { root: ${JSON.stringify(root)}, drainGuard: ${drainGuard} })`,
 		// Reached only when the run did NOT force-exit.
 		`console.log('returned')`,
 	].join("\n");
@@ -96,6 +97,8 @@ describe("tests.forceExit", () => {
 	}, 60_000);
 
 	it("without it, the open handle is REPORTED before the process gives up", async () => {
+		// `drainGuard: true` — what `ream test` passes, because there the process
+		// IS the run.
 		// The contrast with the case above is still the point, but it is no longer
 		// "one exits and one hangs". Hanging silently after a green summary reads
 		// as a crash, and under a CI timeout it is scored as a failure. So the run
@@ -110,4 +113,16 @@ describe("tests.forceExit", () => {
 		// And it names the handle nothing closed — a Timeout, here.
 		expect(outcome.stderr).toMatch(/still open: .*Timeout/);
 	}, 40_000);
+
+	it("stays out of the way when the guard was not asked for", async () => {
+		// The default. This function is a library — called from a bin/test.ts,
+		// from a console command, from a test of its own — and the contract is
+		// that the caller decides what to do with the code it returns. Arming
+		// the guard regardless killed the caller's process two seconds after a
+		// run it had not finished reading.
+		const outcome = await runChild(false, 6_000, false);
+
+		expect(outcome.exited).toBe(false);
+		expect(outcome.stderr).not.toContain("the process is still alive");
+	}, 20_000);
 });

@@ -30,6 +30,22 @@ export interface RunTestsOptions {
 	/** Project root the suites resolve against. Defaults to `process.cwd()`. */
 	root?: string;
 	/**
+	 * Watch for a run that finishes but leaves the process alive, and after a
+	 * grace period say what is still open — then exit with the run's code.
+	 *
+	 * OFF by default, because it ends the process and this function is a
+	 * library: it is called from a `bin/test.ts`, from a console command, and
+	 * from tests of its own, and the documented contract is that the caller
+	 * decides what to do with the returned code. Arming it unconditionally
+	 * broke that — a caller's own runner was killed mid-run by an exit it never
+	 * asked for.
+	 *
+	 * `ream test` turns it on: there the process IS the run, and a summary
+	 * followed by an unexplained hang is worse than an exit that names what is
+	 * still open.
+	 */
+	drainGuard?: boolean;
+	/**
 	 * Suite names to run. Empty (the default) runs every declared suite, in
 	 * order — the AdonisJS behaviour for `ream test` with no argument.
 	 */
@@ -148,6 +164,8 @@ export async function runTests(
 	// Assigned either way: a second call in the same process must not inherit
 	// the first one's flag. A plugin reads it back off `api.cliArgs.forceExit`.
 	const forceExit = tests?.forceExit === true;
+	// Opt-in: this is a library, and the guard ends the process.
+	const drainGuard = options.drainGuard === true;
 	process.env.HELIX_FORCE_EXIT = forceExit ? "1" : "";
 
 	// Only named when a suite actually declares `configure`: pointing at it makes
@@ -190,7 +208,11 @@ export async function runTests(
 	if (selected.length === 0) {
 		try {
 			const outcome = await helix.run(base);
-			return finish(outcome.exitCode, forceExit, helix.armDrainGuard);
+			return finish(
+				outcome.exitCode,
+				forceExit,
+				drainGuard ? helix.armDrainGuard : undefined,
+			);
 		} finally {
 			await dropGlobalHooks();
 		}
@@ -224,12 +246,16 @@ export async function runTests(
 	}
 	if (steps.length === 0) {
 		await dropGlobalHooks();
-		return finish(0, forceExit, helix.armDrainGuard);
+		return finish(0, forceExit, drainGuard ? helix.armDrainGuard : undefined);
 	}
 
 	try {
 		const outcome = await helix.runSuites(steps, base);
-		return finish(outcome.exitCode, forceExit, helix.armDrainGuard);
+		return finish(
+			outcome.exitCode,
+			forceExit,
+			drainGuard ? helix.armDrainGuard : undefined,
+		);
 	} finally {
 		await dropGlobalHooks();
 	}
@@ -244,7 +270,7 @@ export async function runTests(
 function finish(
 	code: number,
 	forceExit: boolean,
-	armDrainGuard: (code: number) => void,
+	armDrainGuard: ((code: number) => void) | undefined,
 ): number {
 	if (forceExit) {
 		process.exitCode = code;
@@ -256,7 +282,7 @@ function finish(
 	// further output, and under a CI timeout that is a non-zero exit for a run in
 	// which every test passed. helix's own CLI already said so; this entry point
 	// did not, and it is the one `ream test` goes through.
-	armDrainGuard(code);
+	armDrainGuard?.(code);
 	return code;
 }
 
