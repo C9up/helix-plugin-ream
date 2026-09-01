@@ -1,13 +1,6 @@
-import {
-	mkdirSync,
-	mkdtempSync,
-	readdirSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { runTests } from "../../src/runTests.js";
 
@@ -17,7 +10,6 @@ import { runTests } from "../../src/runTests.js";
  * suite matching nothing, so the step-building and the hand-off to helix never
  * execute there.
  */
-const here = dirname(fileURLToPath(import.meta.url));
 // The generated specs live in a temp dir, so they cannot resolve `@c9up/helix`
 // by name — they need an absolute URL. Resolving the package here gives one
 // that holds wherever helix comes from: the workspace sources or the published
