@@ -1,6 +1,6 @@
 {
   "name": "@c9up/helix-plugin-ream",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Helix plugin for Ream \u2014 boots a Ream app under test and injects a TestClient on the test context",
   "license": "MIT",
   "type": "module",
