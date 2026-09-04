@@ -7,10 +7,12 @@
  */
 
 import http from "node:http";
-import type { TestClient } from "@c9up/ream/testing";
+import type { RunnerHook, TestInstance } from "@c9up/helix";
+import { Emitter, Runner, TestContext } from "@c9up/helix";
+import { TestClient } from "@c9up/ream/testing";
 import { createTestUtils } from "@c9up/ream/testing/utils";
 import { describe, expect, it } from "vitest";
-import { apiClient, testClient } from "../../src/index.js";
+import { apiClient, type ClientHost, testClient } from "../../src/index.js";
 
 function makeServer() {
 	const server = http.createServer((req, res) => {
@@ -36,20 +38,50 @@ function makeServer() {
 	return { boot };
 }
 
+/**
+ * A test context to hand the plugin's getter.
+ *
+ * The getter ignores it, but helix types it as a real `TestContext`, so the
+ * mock builds one rather than reaching for a cast — which is also what keeps
+ * this file honest when helix's context gains a member.
+ */
+function makeContext(): TestContext {
+	const test: TestInstance = {
+		title: "mock",
+		fullName: "mock",
+		options: {
+			title: "mock",
+			timeout: 0,
+			retries: 0,
+			tags: [],
+			isTodo: false,
+			isFailing: false,
+			meta: {},
+		},
+		isPinned: false,
+		resetTimeout() {},
+		cleanup() {},
+	};
+	return new TestContext(test);
+}
+
+/** The runner helix hands a `cleanup` hook. The plugin ignores it. */
+const runner = () => new Runner(new Emitter());
+
 /** A mock `PluginApi` that captures what the plugin registers. */
 function makeApi() {
-	let read: (() => unknown) | undefined;
-	const teardowns: Array<() => void | Promise<void>> = [];
-	const api = {
+	let read: ((ctx: TestContext) => unknown) | undefined;
+	const teardowns: RunnerHook[] = [];
+	// Typed as the slice the plugin asks for, so a drift in helix's `PluginApi`
+	// is a compile error here rather than a mock that silently stops matching.
+	const api: ClientHost = {
 		context: {
 			macro() {},
-			// Signature matches helix's: the callback receives the context. This
-			// plugin's getter ignores it, so the mock can call it with nothing.
-			getter(name: string, fn: (ctx: never) => unknown) {
-				if (name === "client") read = () => fn(undefined as never);
+			getter(name: string, fn: (ctx: TestContext) => unknown) {
+				if (name === "client") read = fn;
 			},
 		},
-		cleanup(fn: () => void | Promise<void>) {
+		cleanup(fn: RunnerHook) {
 			teardowns.push(fn);
 		},
 	};
@@ -59,7 +91,11 @@ function makeApi() {
 		/** What a test body would get from `ctx.client`. */
 		client: (): TestClient => {
 			if (!read) throw new Error("no `client` getter was registered");
-			return read() as TestClient;
+			const value = read(makeContext());
+			if (!(value instanceof TestClient)) {
+				throw new Error("the `client` getter did not return a TestClient");
+			}
+			return value;
 		},
 	};
 }
@@ -95,7 +131,7 @@ describe("helix plugin > apiClient({ testUtils }) — the AdonisJS shape", () =>
 
 		// The plugin registered a teardown, but the SERVER belongs to the hook.
 		expect(teardowns).toHaveLength(1);
-		await teardowns[0]?.();
+		await teardowns[0]?.(runner());
 		await stop();
 	});
 
@@ -136,7 +172,7 @@ describe("helix plugin > apiClient({ boot }) — for suites that are not split",
 		await client().get("/health").assertOk();
 		expect(client().booted).toBe(true);
 
-		await teardowns[0]?.();
+		await teardowns[0]?.(runner());
 		// The plugin owns this server, so its teardown is what stops it.
 		expect(client().booted).toBe(false);
 	});
@@ -145,7 +181,7 @@ describe("helix plugin > apiClient({ boot }) — for suites that are not split",
 		const boot = async () => ({ port: 1, close: () => {} });
 		const { api, teardowns } = makeApi();
 		await apiClient({ boot })(api);
-		await expect(teardowns[0]?.()).resolves.toBeUndefined();
+		await expect(teardowns[0]?.(runner())).resolves.toBeUndefined();
 	});
 });
 
@@ -170,7 +206,7 @@ describe("helix plugin > testClient()", () => {
 		expect(testClient()).toBe(client());
 		await testClient().get("/health").assertOk();
 
-		await teardowns[0]?.();
+		await teardowns[0]?.(runner());
 		// The teardown forgets it, so a later read reports the wiring gap rather
 		// than handing back a client whose server is gone.
 		expect(() => testClient()).toThrowError(/E_NO_TEST_CLIENT/);
