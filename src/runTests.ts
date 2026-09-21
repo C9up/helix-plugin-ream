@@ -22,8 +22,16 @@
 
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import type { RunConfig } from "@c9up/helix/runner";
 import type { TestSuiteConfig, TestsConfig } from "@c9up/ream";
 import { loadEnvFiles } from "@c9up/ream/env";
+
+/**
+ * helix's coverage options, read off the run config rather than imported by
+ * name: this bridge builds against every helix in its peer range, and the named
+ * export is newer than the range's floor.
+ */
+type CoverageOptions = NonNullable<RunConfig["coverage"]>;
 
 /** What a caller may override on top of the rc file. */
 export interface RunTestsOptions {
@@ -56,6 +64,12 @@ export interface RunTestsOptions {
 	reporters?: string[];
 	/** Stop at the first failure. */
 	bail?: boolean;
+	/**
+	 * Collect V8 coverage for the run. Passed to helix untouched — coverage is
+	 * the runner's, and this entry point only carries it across, the way it
+	 * carries `threads` and `reporters`.
+	 */
+	coverage?: CoverageOptions;
 	/**
 	 * The module that declared the suites, so a `suites[].configure` callback can
 	 * be re-imported in each worker — a function does not cross a process
@@ -196,6 +210,7 @@ export async function runTests(
 		timeoutMs: tests?.timeout,
 		reporters: options.reporters,
 		bail: options.bail,
+		coverage: options.coverage,
 	};
 
 	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
