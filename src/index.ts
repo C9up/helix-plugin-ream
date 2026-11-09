@@ -40,7 +40,7 @@
  *   })
  */
 
-import type { Plugin, PluginApi } from "@c9up/helix";
+import { getActiveTest, type Plugin, type PluginApi } from "@c9up/helix";
 import type { AuthStrategy, RouteManifest } from "@c9up/ream/testing";
 import { TestClient } from "@c9up/ream/testing";
 import type { BootServer, TestUtils } from "@c9up/ream/testing/utils";
@@ -72,12 +72,45 @@ export interface ApiClientConfig {
 }
 
 /**
- * Injects a {@link TestClient} on the test context as `ctx.client`.
+ * One test's client over the file's server.
  *
- * With `testUtils`, the client is the one belonging to the server the suite
- * hook started — so nothing is booted here, and a suite without the hook has no
- * server at all. With `boot`, the client owns its server and starts it on the
- * first request.
+ * Its request state — default headers set with `withHeader()` — is its own, so
+ * it ends with the test; the server is the shared one, booted once per file.
+ * `booted` and `port` report that server.
+ */
+class TestClientView extends TestClient {
+	readonly #shared: TestClient;
+
+	constructor(
+		shared: TestClient,
+		options: { auth?: AuthStrategy; routes?: RouteManifest },
+	) {
+		// Booting the view boots the shared server (once) and points at it;
+		// closing the view releases nothing, since the server is not its own.
+		super(async () => {
+			await shared.boot();
+			return { port: shared.port, close: () => {} };
+		}, options);
+		this.#shared = shared;
+	}
+
+	override get booted(): boolean {
+		return this.#shared.booted;
+	}
+
+	override get port(): number {
+		return this.#shared.port;
+	}
+}
+
+/**
+ * Injects a {@link TestClient} on the test context as `ctx.client` — a fresh
+ * one per test, over the server the file booted, so a header one test sets
+ * (an `authorization` it logs in with) never reaches the next.
+ *
+ * With `testUtils`, the server is the one the suite hook started — so nothing
+ * is booted here, and a suite without the hook has no server at all. With
+ * `boot`, the plugin owns its server and starts it on the first request.
  *
  * Either way `api.cleanup` closes what this plugin started, which is nothing in
  * the `testUtils` case — the hook's own teardown owns that server.
@@ -123,7 +156,15 @@ export function apiClient(config: ApiClientConfig) {
 		// `ctx.client` first — a fixture or a runner hook has no context to read
 		// it from, which is the reason the accessor exists.
 		setResolver(read);
-		api.context.getter("client", read);
+		// helix caches a getter's value per test context: one view per test.
+		api.context.getter(
+			"client",
+			() =>
+				new TestClientView(read(), {
+					auth: config.auth,
+					routes: config.routes,
+				}),
+		);
 		api.cleanup(async () => {
 			if (owned) await owned.close();
 			clearResolver(read);
@@ -155,8 +196,9 @@ function clearResolver(read: () => TestClient): void {
  *
  * `ctx.client` covers a test body. A helper module, a fixture, or a
  * `runnerHooks` setup has no context to read it from and had to be handed one
- * through a parameter every call site then had to thread. Same instance as
- * `ctx.client` — the AdonisJS `services/test_utils` idiom.
+ * through a parameter every call site then had to thread. While a test runs it
+ * is that test's `ctx.client`; outside one, the client of the file's server —
+ * the AdonisJS `services/test_utils` idiom.
  *
  * Throws when no client is in play, which is a wiring mistake rather than a
  * state to handle.
@@ -170,6 +212,10 @@ export function testClient(): TestClient {
 				"CURRENT process.",
 		);
 	}
+	const context = getActiveTest()?.context;
+	const current =
+		context === undefined ? undefined : Reflect.get(context, "client");
+	if (current instanceof TestClient) return current;
 	return resolve();
 }
 

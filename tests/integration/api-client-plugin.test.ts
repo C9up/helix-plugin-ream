@@ -148,6 +148,33 @@ describe("helix plugin > apiClient({ testUtils }) — the AdonisJS shape", () =>
 	});
 });
 
+describe("helix plugin > apiClient() — one client per test", () => {
+	it("gives each test context its own client over one server", async () => {
+		let boots = 0;
+		const { boot } = makeServer();
+		const counted = (port: number) => {
+			boots += 1;
+			return boot(port);
+		};
+		const { api, client, teardowns } = makeApi();
+		await apiClient({ boot: counted })(api);
+
+		const first = client();
+		const second = client();
+		expect(first).not.toBe(second);
+		first.withHeader("x-test", "first");
+		await first.get("/health").assertOk();
+		await second.get("/health").assertOk();
+		// One server for both, booted by whichever asked first.
+		expect(boots).toBe(1);
+		expect(second.booted).toBe(true);
+		expect(second.port).toBe(first.port);
+
+		await teardowns[0]?.(runner());
+		expect(first.booted).toBe(false);
+	});
+});
+
 describe("helix plugin > apiClient({ boot }) — for suites that are not split", () => {
 	it("starts no server until a request is made", async () => {
 		let boots = 0;
@@ -193,7 +220,7 @@ describe("helix plugin > apiClient() with neither", () => {
 });
 
 describe("helix plugin > testClient()", () => {
-	it("hands back the instance the context carries", async () => {
+	it("hands back the client of the file's server outside a test", async () => {
 		const { boot } = makeServer();
 		const testUtils = createTestUtils(boot);
 		const { api, client, teardowns } = makeApi();
@@ -201,9 +228,12 @@ describe("helix plugin > testClient()", () => {
 		await apiClient({ testUtils })(api);
 		const stop = await testUtils.httpServer().start();
 
-		// Same object, not a second client — booting one boots the one the tests
-		// use, which is what makes it usable from a fixture or a runner hook.
-		expect(testClient()).toBe(client());
+		// Outside a test there is no test's client to hand back: it is the one
+		// the server belongs to — what a fixture or a runner hook talks to. A
+		// test's `ctx.client` is its own view over that same server.
+		expect(testClient()).toBe(testUtils.client());
+		expect(testClient()).not.toBe(client());
+		expect(client().port).toBe(testClient().port);
 		await testClient().get("/health").assertOk();
 
 		await teardowns[0]?.(runner());
