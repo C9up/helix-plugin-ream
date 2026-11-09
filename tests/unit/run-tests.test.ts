@@ -183,7 +183,9 @@ describe("runTests", () => {
 	});
 
 	it("runs normally when no suite declares configure", async () => {
-		await expect(runTests({ suites: [emptySuite] }, { root })).resolves.toBe(0);
+		await expect(
+			runTests({ suites: [emptySuite] }, { root, passWithNoTests: true }),
+		).resolves.toBe(0);
 	});
 
 	it("clears a stale forceExit rather than inheriting it", async () => {
@@ -202,10 +204,21 @@ describe("runTests", () => {
 		expect(process.env.HELIX_FORCE_EXIT).toBe("");
 	});
 
-	it("succeeds when every declared suite matches nothing", async () => {
-		// An empty suite is a warning, not a failure — the exit code must not
-		// claim tests failed when none ran.
-		await expect(runTests({ suites: [emptySuite] }, { root })).resolves.toBe(0);
+	it("fails when every declared suite matches nothing", async () => {
+		// A typo in a glob, or files that moved: nothing ran, so nothing passed.
+		await expect(runTests({ suites: [emptySuite] }, { root })).resolves.toBe(1);
+	});
+
+	it("fails when a suite named on the command line matches nothing", async () => {
+		await expect(
+			runTests({ suites: [emptySuite] }, { root, suites: ["unit"] }),
+		).resolves.toBe(1);
+	});
+
+	it("passes an empty run when passWithNoTests says so", async () => {
+		await expect(
+			runTests({ suites: [emptySuite] }, { root, passWithNoTests: true }),
+		).resolves.toBe(0);
 	});
 });
 
@@ -248,7 +261,9 @@ describe("runTestsFromRcFile", () => {
 			'export default { tests: { suites: [{ name: "unit", files: "tests/unit/**/*.spec.ts" }] } }\n',
 		);
 
-		await expect(runTestsFromRcFile("reamrc.ts", { root })).resolves.toBe(0);
+		await expect(
+			runTestsFromRcFile("reamrc.ts", { root, passWithNoTests: true }),
+		).resolves.toBe(0);
 		// Selecting a suite the rc file declares proves the block was read, not
 		// silently defaulted away.
 		await expect(

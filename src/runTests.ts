@@ -84,6 +84,12 @@ export interface RunTestsOptions {
 	 * workers simply run under the same loader as their parent.
 	 */
 	nodeArgs?: string[];
+	/**
+	 * Exit 0 when the selection finds no test file, or a file declares no test.
+	 * Off by default: a glob with a typo, or files that moved, would otherwise
+	 * turn the run green with nothing executed.
+	 */
+	passWithNoTests?: boolean;
 }
 
 /** A suite name that was asked for but is not declared. */
@@ -203,6 +209,7 @@ export async function runTests(
 			: "";
 	process.env.HELIX_SUITE_CONFIG_KEY = "tests.suites";
 
+	const passWithNoTests = options.passWithNoTests === true;
 	const base = {
 		root,
 		nodeArgs: workerNodeArgs(options),
@@ -211,6 +218,7 @@ export async function runTests(
 		reporters: options.reporters,
 		bail: options.bail,
 		coverage: options.coverage,
+		passWithNoTests,
 	};
 
 	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
@@ -234,6 +242,11 @@ export async function runTests(
 	}
 
 	const steps = [];
+	// A suite asked for by name that matches nothing is a configuration error,
+	// even when the others have files; with every suite running it is only
+	// worth a warning, unless nothing at all is left to run.
+	const named = (options.suites ?? []).length > 0;
+	let namedSuiteEmpty = false;
 	for (const suite of selected) {
 		const files = await helix.resolveSuiteFiles(
 			{
@@ -247,6 +260,7 @@ export async function runTests(
 		);
 		if (files.length === 0) {
 			process.stderr.write(`ream: suite "${suite.name}": no test files\n`);
+			if (named) namedSuiteEmpty = true;
 			continue;
 		}
 		steps.push({
@@ -261,13 +275,25 @@ export async function runTests(
 	}
 	if (steps.length === 0) {
 		await dropGlobalHooks();
-		return finish(0, forceExit, drainGuard ? helix.armDrainGuard : undefined);
+		const code = passWithNoTests ? 0 : 1;
+		process.stderr.write(
+			`ream: No test files found, exiting with code ${code}\n`,
+		);
+		return finish(
+			code,
+			forceExit,
+			drainGuard ? helix.armDrainGuard : undefined,
+		);
 	}
 
 	try {
 		const outcome = await helix.runSuites(steps, base);
+		const code =
+			namedSuiteEmpty && !passWithNoTests
+				? Math.max(outcome.exitCode, 1)
+				: outcome.exitCode;
 		return finish(
-			outcome.exitCode,
+			code,
 			forceExit,
 			drainGuard ? helix.armDrainGuard : undefined,
 		);

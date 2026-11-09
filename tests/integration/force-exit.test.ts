@@ -53,7 +53,7 @@ function runChild(
 		`import { runTests } from ${JSON.stringify(runTestsPath)}`,
 		// A handle nothing closes — a DB pool or a server, in a real app.
 		`const handle = setInterval(() => {}, 1000)`,
-		`await runTests({ suites: [], forceExit: ${forceExit} }, { root: ${JSON.stringify(root)}, drainGuard: ${drainGuard} })`,
+		`await runTests({ suites: [], forceExit: ${forceExit} }, { root: ${JSON.stringify(root)}, drainGuard: ${drainGuard}, passWithNoTests: true })`,
 		// Reached only when the run did NOT force-exit.
 		`console.log('returned')`,
 	].join("\n");

@@ -76,6 +76,43 @@ describe("runTests — suites that match files", () => {
 		expect(code).toBe(0);
 	}, 60_000);
 
+	it("fails the run when a suite it was asked for matches nothing, and still runs the others", async () => {
+		spec("tests/unit/a.spec.ts", 'test("unit green", () => {})');
+
+		const code = await runTests(
+			{
+				suites: [
+					{ name: "unit", files: "tests/unit/**/*.spec.ts" },
+					{ name: "functional", files: "tests/functional/**/*.spec.ts" },
+				],
+			},
+			{
+				root,
+				nodeArgs: nodeArgs(),
+				reporters: ["dot"],
+				suites: ["unit", "functional"],
+			},
+		);
+
+		expect(code).toBe(1);
+	}, 60_000);
+
+	it("only warns about an empty suite when every suite runs", async () => {
+		spec("tests/unit/a.spec.ts", 'test("unit green", () => {})');
+
+		const code = await runTests(
+			{
+				suites: [
+					{ name: "unit", files: "tests/unit/**/*.spec.ts" },
+					{ name: "functional", files: "tests/functional/**/*.spec.ts" },
+				],
+			},
+			{ root, nodeArgs: nodeArgs(), reporters: ["dot"] },
+		);
+
+		expect(code).toBe(0);
+	}, 60_000);
+
 	it("fails the run when a suite fails", async () => {
 		spec(
 			"tests/unit/a.spec.ts",
