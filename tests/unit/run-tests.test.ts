@@ -2,6 +2,7 @@ import {
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
+	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
@@ -310,6 +311,33 @@ describe("runTestsFromRcFile", () => {
 		await expect(
 			runTestsFromRcFile("reamrc.ts", { root, suites: ["nope"] }),
 		).rejects.toThrow(/Declared: unit\./);
+	});
+
+	it("imports the rc file in the test environment, with .env.test loaded", async () => {
+		// Whatever the rc file evaluates eagerly — a provider import, an env read —
+		// has to see the test environment, and `.env.test` has to win over
+		// `.env` for it too.
+		process.env.NODE_ENV = "development";
+		delete process.env.REAM_RT_RC;
+		writeFileSync(join(root, ".env"), "REAM_RT_RC=dev\n");
+		writeFileSync(join(root, ".env.test"), "REAM_RT_RC=testdb\n");
+		const log = join(root, "rc.log");
+		writeFileSync(
+			join(root, "reamrc.ts"),
+			[
+				'import { writeFileSync } from "node:fs"',
+				`writeFileSync(${JSON.stringify(log)}, process.env.NODE_ENV + " " + process.env.REAM_RT_RC)`,
+				"export default {}",
+				"",
+			].join("\n"),
+		);
+
+		try {
+			await runTestsFromRcFile("reamrc.ts", { root, passWithNoTests: true });
+			expect(readFileSync(log, "utf8")).toBe("test testdb");
+		} finally {
+			delete process.env.REAM_RT_RC;
+		}
 	});
 
 	it("treats an rc file without a tests block as no suites declared", async () => {

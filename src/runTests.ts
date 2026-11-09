@@ -165,12 +165,8 @@ export async function runTests(
 	tests: TestsConfig | undefined,
 	options: RunTestsOptions = {},
 ): Promise<number> {
-	process.env.NODE_ENV = "test";
-
 	const root = options.root ?? process.cwd();
-	// Skipping `.env.local` is deliberate (and what the Ignitor does for the test
-	// environment): a developer's local overrides must not decide what CI runs.
-	loadEnvFiles(pathToFileURL(`${root}${path.sep}`), { skipEnvLocal: true });
+	enterTestEnvironment(root);
 	const declared = tests?.suites ?? [];
 	const selected = select(declared, options.suites ?? []);
 
@@ -305,6 +301,18 @@ export async function runTests(
 }
 
 /**
+ * `NODE_ENV=test`, then the `.env` files of `root` — `.env.test` over `.env`.
+ * Idempotent: an existing key is never overwritten, so a second call changes
+ * nothing.
+ */
+function enterTestEnvironment(root: string): void {
+	process.env.NODE_ENV = "test";
+	// Skipping `.env.local` is deliberate (and what the Ignitor does for the test
+	// environment): a developer's local overrides must not decide what CI runs.
+	loadEnvFiles(pathToFileURL(`${root}${path.sep}`), { skipEnvLocal: true });
+}
+
+/**
  * Apply `tests.forceExit`. helix does this inside its own run — sets the exit
  * code, then `process.exit()` — rather than leaving it to the caller, because
  * the whole point is to not wait for the event loop to drain. A run that
@@ -331,13 +339,18 @@ function finish(
 
 /**
  * Load an rc file and run its suites — the one-liner a `bin/test.ts` needs.
- * `rcPath` is resolved against `root`.
+ * `rcPath` is resolved against `root`. The test environment is entered before
+ * the rc file is imported.
  */
 export async function runTestsFromRcFile(
 	rcPath: string,
 	options: RunTestsOptions = {},
 ): Promise<number> {
 	const root = options.root ?? process.cwd();
+	// Before the rc file is imported: whatever it evaluates eagerly — a provider
+	// import, an env read — runs in the test environment, as AdonisJS
+	// `bin/test.ts` sets it before importing anything.
+	enterTestEnvironment(root);
 	const absolute = path.isAbsolute(rcPath)
 		? rcPath
 		: path.resolve(root, rcPath);
