@@ -210,7 +210,10 @@ export async function runTests(
 		root,
 		nodeArgs: workerNodeArgs(options),
 		threads: options.threads,
-		timeoutMs: tests?.timeout,
+		// The rc file's `timeout` is the run-wide DEFAULT: `configure({ timeout })`
+		// and a plugin editing `api.config.timeout` beat it, a suite's own
+		// `timeout` beats them all.
+		defaultTimeoutMs: tests?.timeout,
 		reporters: options.reporters,
 		bail: options.bail,
 		coverage: options.coverage,
@@ -249,7 +252,7 @@ export async function runTests(
 				// inherit the previous suite's.
 				HELIX_RETRIES: suite.retries === undefined ? "" : String(suite.retries),
 			},
-			config: { ...base, files, timeoutMs: suite.timeout ?? tests?.timeout },
+			config: { ...base, files, timeoutMs: suite.timeout },
 		});
 	}
 	if (selected.length > 0 && steps.length === 0) {

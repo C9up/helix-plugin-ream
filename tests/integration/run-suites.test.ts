@@ -113,6 +113,53 @@ describe("runTests — suites that match files", () => {
 		expect(code).toBe(0);
 	}, 60_000);
 
+	it("lets a plugin's timeout beat the rc file's run-wide one", async () => {
+		// The rc file's `timeout` is the default a plugin may raise or lower;
+		// passing it as an override made `api.config.timeout` dead under `ream test`.
+		mkdirSync(join(root, "tests"), { recursive: true });
+		writeFileSync(
+			join(root, "tests/bootstrap.ts"),
+			"export const plugins = [(api) => { api.config.timeout = 100 }]\n",
+		);
+		spec(
+			"tests/unit/a.spec.ts",
+			'test("sleeps 600ms", () => new Promise((r) => setTimeout(r, 600)))',
+		);
+
+		const code = await runTests(
+			{
+				timeout: 5_000,
+				suites: [{ name: "unit", files: "tests/unit/**/*.spec.ts" }],
+			},
+			{ root, nodeArgs: nodeArgs(), reporters: ["dot"] },
+		);
+
+		expect(code).toBe(1);
+	}, 60_000);
+
+	it("lets a suite's own timeout beat a plugin's", async () => {
+		mkdirSync(join(root, "tests"), { recursive: true });
+		writeFileSync(
+			join(root, "tests/bootstrap.ts"),
+			"export const plugins = [(api) => { api.config.timeout = 100 }]\n",
+		);
+		spec(
+			"tests/unit/a.spec.ts",
+			'test("sleeps 600ms", () => new Promise((r) => setTimeout(r, 600)))',
+		);
+
+		const code = await runTests(
+			{
+				suites: [
+					{ name: "unit", files: "tests/unit/**/*.spec.ts", timeout: 5_000 },
+				],
+			},
+			{ root, nodeArgs: nodeArgs(), reporters: ["dot"] },
+		);
+
+		expect(code).toBe(0);
+	}, 60_000);
+
 	it("fails the run when a suite fails", async () => {
 		spec(
 			"tests/unit/a.spec.ts",
