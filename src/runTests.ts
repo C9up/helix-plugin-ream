@@ -221,26 +221,9 @@ export async function runTests(
 		passWithNoTests,
 	};
 
-	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
-	// them — helix's semantics, and the difference between migrating once and
-	// migrating once per test file.
-	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap);
-
-	// No suites declared: run whatever the project's discovery finds, so an app
-	// with a plain `tests/` directory works without declaring anything.
-	if (selected.length === 0) {
-		try {
-			const outcome = await helix.run(base);
-			return finish(
-				outcome.exitCode,
-				forceExit,
-				drainGuard ? helix.armDrainGuard : undefined,
-			);
-		} finally {
-			await dropGlobalHooks();
-		}
-	}
-
+	// The suites' files resolve BEFORE the global setup: a `files` callback that
+	// throws, or a glob that cannot be walked, must fail the run while nothing
+	// has been set up yet, instead of leaving a migrated database behind.
 	const steps = [];
 	// A suite asked for by name that matches nothing is a configuration error,
 	// even when the others have files; with every suite running it is only
@@ -273,8 +256,7 @@ export async function runTests(
 			config: { ...base, files, timeoutMs: suite.timeout ?? tests?.timeout },
 		});
 	}
-	if (steps.length === 0) {
-		await dropGlobalHooks();
+	if (selected.length > 0 && steps.length === 0) {
 		const code = passWithNoTests ? 0 : 1;
 		process.stderr.write(
 			`ream: No test files found, exiting with code ${code}\n`,
@@ -284,6 +266,26 @@ export async function runTests(
 			forceExit,
 			drainGuard ? helix.armDrainGuard : undefined,
 		);
+	}
+
+	// `runnerHooks` run ONCE around the whole run, here, and the workers skip
+	// them — helix's semantics, and the difference between migrating once and
+	// migrating once per test file.
+	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap);
+
+	// No suites declared: run whatever the project's discovery finds, so an app
+	// with a plain `tests/` directory works without declaring anything.
+	if (selected.length === 0) {
+		try {
+			const outcome = await helix.run(base);
+			return finish(
+				outcome.exitCode,
+				forceExit,
+				drainGuard ? helix.armDrainGuard : undefined,
+			);
+		} finally {
+			await dropGlobalHooks();
+		}
 	}
 
 	try {

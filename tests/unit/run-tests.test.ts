@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -117,6 +123,41 @@ describe("runTests", () => {
 		await runTests({ suites: [emptySuite] }, { root });
 
 		expect(process.env.HELIX_BOOTSTRAP).toBe(join(root, "tests/bootstrap.ts"));
+	});
+
+	it("resolves the suites' files before the global setup, so a failure leaves nothing set up", async () => {
+		// A files callback that throws used to fail AFTER `runnerHooks.setup` ran
+		// and outside the teardown's reach — a migrated database left behind.
+		const log = join(root, "hooks.log");
+		mkdirSync(join(root, "tests"), { recursive: true });
+		writeFileSync(
+			join(root, "tests/bootstrap.ts"),
+			[
+				'import { appendFileSync } from "node:fs"',
+				"export const runnerHooks = {",
+				`  setup: [() => appendFileSync(${JSON.stringify(log)}, "setup\\n")],`,
+				`  teardown: [() => appendFileSync(${JSON.stringify(log)}, "teardown\\n")],`,
+				"}",
+				"",
+			].join("\n"),
+		);
+
+		await expect(
+			runTests(
+				{
+					suites: [
+						{
+							name: "broken",
+							files: () => {
+								throw new Error("files callback failed");
+							},
+						},
+					],
+				},
+				{ root },
+			),
+		).rejects.toThrow("files callback failed");
+		expect(existsSync(log)).toBe(false);
 	});
 
 	it("leaves the bootstrap unset when the project has none", async () => {
