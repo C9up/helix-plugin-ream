@@ -12,12 +12,28 @@ pnpm add -D @c9up/helix-plugin-ream @c9up/helix
 
 ## Inject a test client
 
+`tests/bootstrap.ts` exports `plugins`, `runnerHooks` and `configureSuite`; it never calls `configure()` itself. helix imports it and configures each run with those exports and the name of the suite being run — a `configure()` called in the file would run at import time, before any suite exists. `ream new` writes this file:
+
 ```ts
 // tests/bootstrap.ts
-import { configure } from '@c9up/helix'
+import type { ConfigureOptions, Plugin, RunnerHook } from '@c9up/helix'
 import { apiClient } from '@c9up/helix-plugin-ream'
+import { createTestUtils } from '@c9up/ream/testing/utils'
 
-await configure({ plugins: [apiClient({ boot: () => bootApp() })] })
+export const testUtils = createTestUtils((port) => bootApp(port))
+
+export const plugins: Plugin[] = [apiClient({ testUtils })]
+
+export const runnerHooks: { setup: RunnerHook[]; teardown: RunnerHook[] } = {
+  setup: [],
+  teardown: [],
+}
+
+export const configureSuite: ConfigureOptions['configureSuite'] = (suite) => {
+  if (suite.name === 'functional') {
+    return suite.setup(() => testUtils.httpServer().start())
+  }
+}
 ```
 
 ```ts
@@ -26,7 +42,7 @@ test('health', async ({ client }) => {
 })
 ```
 
-The server boots once at `configure()` time, is shared across the run, and closes through `api.cleanup` when the run ends.
+With `testUtils`, the suite hook owns the server: the plugin reads the client of the server that hook started, and a suite that declares no hook starts none. For a project whose suites are not split yet, `apiClient({ boot: (port) => bootApp(port) })` lets the client own its server instead: it starts on the client's first request and closes through `api.cleanup` when the run ends.
 
 ## Run the suites declared in the rc file
 

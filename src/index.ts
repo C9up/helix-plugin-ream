@@ -10,21 +10,29 @@
  * the SERVER is started by a suite hook, so a suite that does not declare the
  * hook never starts one.
  *
+ * The bootstrap module exports its hooks and never calls `configure()`:
+ * helix imports it and configures each run with these exports and the name of
+ * the suite being run.
+ *
  *   // tests/bootstrap.ts
- *   import { configure } from '@c9up/helix'
+ *   import type { ConfigureOptions, Plugin, RunnerHook } from '@c9up/helix'
  *   import { apiClient } from '@c9up/helix-plugin-ream'
  *   import { createTestUtils } from '@c9up/ream/testing/utils'
  *
  *   export const testUtils = createTestUtils((port) => bootApp(port))
  *
- *   await configure({
- *     plugins: [apiClient({ testUtils })],
- *     configureSuite(suite) {
- *       if (['functional', 'e2e'].includes(suite.name)) {
- *         return suite.setup(() => testUtils.httpServer().start())
- *       }
- *     },
- *   })
+ *   export const plugins: Plugin[] = [apiClient({ testUtils })]
+ *
+ *   export const runnerHooks: { setup: RunnerHook[]; teardown: RunnerHook[] } = {
+ *     setup: [],
+ *     teardown: [],
+ *   }
+ *
+ *   export const configureSuite: ConfigureOptions['configureSuite'] = (suite) => {
+ *     if (['functional', 'e2e'].includes(suite.name)) {
+ *       return suite.setup(() => testUtils.httpServer().start())
+ *     }
+ *   }
  *
  *   // a test
  *   test('health', async ({ client }) => {
