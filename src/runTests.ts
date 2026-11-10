@@ -90,6 +90,34 @@ export interface RunTestsOptions {
 	 * turn the run green with nothing executed.
 	 */
 	passWithNoTests?: boolean;
+	/**
+	 * What to run, narrowed — the console's `test` filters: test files
+	 * (helix's `--files` rule), tags (`~@tag` excludes), parent group titles,
+	 * test titles. Each list is used whole: a title is never split on its
+	 * commas. `suites` adds to {@link RunTestsOptions.suites}.
+	 */
+	filters?: TestFilters;
+	/** Timeout for every test, in ms — beats a suite's own and the rc file's. */
+	timeout?: number;
+	/** Extra attempts for every test of a suite that declares none. */
+	retries?: number;
+	/** Run only the tests that failed during the last run. */
+	failed?: boolean;
+	/** Watch the files and re-run the tests on a change. */
+	watch?: boolean;
+	/** With `watch`: detect changes by polling (network shares, containers). */
+	poll?: boolean;
+	/** With `watch`: clear the terminal before each re-run. Default true. */
+	clear?: boolean;
+}
+
+/** The filters `ream test` forwards, in the console's `filters` shape. */
+export interface TestFilters {
+	suites?: string[];
+	files?: string[];
+	tags?: string[];
+	groups?: string[];
+	tests?: string[];
 }
 
 /** A suite name that was asked for but is not declared. */
@@ -168,7 +196,11 @@ export async function runTests(
 	const root = options.root ?? process.cwd();
 	enterTestEnvironment(root);
 	const declared = tests?.suites ?? [];
-	const selected = select(declared, options.suites ?? []);
+	const filters = options.filters ?? {};
+	const asked = [
+		...new Set([...(options.suites ?? []), ...(filters.suites ?? [])]),
+	];
+	const selected = select(declared, asked);
 
 	const helix = await import("@c9up/helix/runner");
 
@@ -205,6 +237,36 @@ export async function runTests(
 			: "";
 	process.env.HELIX_SUITE_CONFIG_KEY = "tests.suites";
 
+	// The per-test filters reach the workers through the environment, as with
+	// `helix test`. Encoded rather than comma-joined, and written every time so
+	// a value left by an earlier run in this process cannot narrow this one.
+	let testTitles = filters.tests ?? [];
+	if (options.failed === true) {
+		const failedTests = await helix.readFailedCache(root);
+		if (failedTests.length === 0) {
+			process.stdout.write(
+				"ream: no failing tests cached — running all of them\n",
+			);
+		} else {
+			testTitles = failedTests;
+		}
+	}
+	const list = (values: readonly string[] | undefined): string =>
+		values === undefined || values.length === 0
+			? ""
+			: helix.encodeEnvList(values);
+	process.env.HELIX_TESTS = list(testTitles);
+	process.env.HELIX_TAGS = list(filters.tags);
+	process.env.HELIX_GROUPS = list(filters.groups);
+	process.env.HELIX_FILES = list(filters.files);
+	process.env.HELIX_FAILED = options.failed === true ? "1" : "";
+	// Read by a plugin off `api.cliArgs.timeout`; the run itself carries the
+	// timeout in its config below.
+	process.env.HELIX_TIMEOUT =
+		options.timeout === undefined ? "" : String(options.timeout);
+	process.env.HELIX_RETRIES =
+		options.retries === undefined ? "" : String(options.retries);
+
 	const passWithNoTests = options.passWithNoTests === true;
 	const base = {
 		root,
@@ -218,6 +280,17 @@ export async function runTests(
 		bail: options.bail,
 		coverage: options.coverage,
 		passWithNoTests,
+		// `--timeout` beats every configured value.
+		timeoutMs: options.timeout,
+		watch:
+			options.watch === true
+				? {
+						enabled: true,
+						poll: options.poll === true,
+						// The console clears by default; `--no-clear` keeps the output.
+						clearScreen: options.clear !== false,
+					}
+				: undefined,
 	};
 
 	// The suites' files resolve BEFORE the global setup: a `files` callback that
@@ -227,18 +300,24 @@ export async function runTests(
 	// A suite asked for by name that matches nothing is a configuration error,
 	// even when the others have files; with every suite running it is only
 	// worth a warning, unless nothing at all is left to run.
-	const named = (options.suites ?? []).length > 0;
+	// A file filter narrowing a named suite to nothing is the filter at work,
+	// not a broken suite.
+	const fileFilters = filters.files ?? [];
+	const named = asked.length > 0 && fileFilters.length === 0;
 	let namedSuiteEmpty = false;
 	for (const suite of selected) {
-		const files = await helix.resolveSuiteFiles(
-			{
-				name: suite.name,
-				files: suite.files,
-				timeout: suite.timeout,
-				retries: suite.retries,
-			},
-			root,
-			undefined,
+		const files = helix.filterByFileFilters(
+			await helix.resolveSuiteFiles(
+				{
+					name: suite.name,
+					files: suite.files,
+					timeout: suite.timeout,
+					retries: suite.retries,
+				},
+				root,
+				undefined,
+			),
+			fileFilters,
 		);
 		if (files.length === 0) {
 			process.stderr.write(`ream: suite "${suite.name}": no test files\n`);
@@ -250,12 +329,18 @@ export async function runTests(
 				HELIX_SUITE: suite.name,
 				// Empty means unset, so a suite that declares no retries does not
 				// inherit the previous suite's.
-				HELIX_RETRIES: suite.retries === undefined ? "" : String(suite.retries),
+				HELIX_RETRIES: String(suite.retries ?? options.retries ?? ""),
 			},
-			config: { ...base, files, timeoutMs: suite.timeout },
+			config: { ...base, files, timeoutMs: options.timeout ?? suite.timeout },
 		});
 	}
-	if (selected.length > 0 && steps.length === 0) {
+	// No suite declared and a file filter given: discover here, so the filter
+	// narrows what discovery finds instead of being lost.
+	const discovered =
+		selected.length === 0 && fileFilters.length > 0
+			? helix.filterByFileFilters(await helix.discover(root), fileFilters)
+			: undefined;
+	if ((selected.length > 0 && steps.length === 0) || discovered?.length === 0) {
 		const code = passWithNoTests ? 0 : 1;
 		process.stderr.write(
 			`ream: No test files found, exiting with code ${code}\n`,
@@ -276,7 +361,9 @@ export async function runTests(
 	// with a plain `tests/` directory works without declaring anything.
 	if (selected.length === 0) {
 		try {
-			const outcome = await helix.run(base);
+			const outcome = await helix.run(
+				discovered === undefined ? base : { ...base, files: discovered },
+			);
 			return finish(
 				outcome.exitCode,
 				forceExit,

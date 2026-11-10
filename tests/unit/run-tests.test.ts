@@ -230,6 +230,41 @@ describe("runTests", () => {
 		).resolves.toBe(0);
 	});
 
+	it("clears filters a previous run left in the environment", async () => {
+		// The filters travel to the workers through the environment; a value an
+		// earlier call set must not narrow a call that asked for nothing.
+		process.env.HELIX_TESTS = "stale";
+		process.env.HELIX_TAGS = "@stale";
+		try {
+			await runTests({ suites: [emptySuite] }, { root, passWithNoTests: true });
+			expect(process.env.HELIX_TESTS).toBe("");
+			expect(process.env.HELIX_TAGS).toBe("");
+		} finally {
+			delete process.env.HELIX_TESTS;
+			delete process.env.HELIX_TAGS;
+		}
+	});
+
+	it("hands the forwarded lists to the workers whole, commas included", async () => {
+		try {
+			await runTests(
+				{ suites: [emptySuite] },
+				{
+					root,
+					passWithNoTests: true,
+					filters: { tests: ["a title, with a comma"], tags: ["~@slow"] },
+				},
+			);
+			expect(JSON.parse(process.env.HELIX_TESTS ?? "")).toEqual([
+				"a title, with a comma",
+			]);
+			expect(JSON.parse(process.env.HELIX_TAGS ?? "")).toEqual(["~@slow"]);
+		} finally {
+			delete process.env.HELIX_TESTS;
+			delete process.env.HELIX_TAGS;
+		}
+	});
+
 	it("clears a stale forceExit rather than inheriting it", async () => {
 		// The flag is what a plugin reads off `api.cliArgs.forceExit`. It is
 		// assigned unconditionally, so a value left in the environment — by the
