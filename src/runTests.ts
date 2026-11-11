@@ -1,10 +1,9 @@
 /**
  * `ream test` — run the suites declared in the rc file.
  *
- * The AdonisJS stratification, kept intact: the FRAMEWORK reads its rc file and
- * hands the suites to the runner, exactly as `@adonisjs/core` reads
- * `adonisrc.ts` and hands them to helix. The runner itself (helix) knows nothing
- * about ream, and ream owns no test execution — it only translates.
+ * The FRAMEWORK reads its rc file and hands the suites to the runner. The
+ * runner itself (helix) knows nothing about ream, and ream owns no test
+ * execution — this bridge only translates.
  *
  *     // bin/test.ts
  *     import { runTestsFromRcFile } from '@c9up/helix-plugin-ream/runner'
@@ -55,7 +54,7 @@ export interface RunTestsOptions {
 	drainGuard?: boolean;
 	/**
 	 * Suite names to run. Empty (the default) runs every declared suite, in
-	 * order — the AdonisJS behaviour for `ream test` with no argument.
+	 * order — what `ream test` does with no argument.
 	 */
 	suites?: string[];
 	/** Concurrent worker processes. */
@@ -184,7 +183,7 @@ function select(
  * console command, or from a test of its own.
  *
  * `NODE_ENV=test` is set first, then the `.env` files are loaded — so `.env.test`
- * wins over `.env` and `.env.local` is skipped, the AdonisJS test-env rules. It
+ * wins over `.env` and `.env.local` is skipped, the test-environment rules. It
  * happens HERE, in the process that spawns the workers, so every worker
  * inherits the result: an app gets its test environment without writing a
  * single hook, which is what "loaded automatically" has to mean.
@@ -432,8 +431,8 @@ export async function runTestsFromRcFile(
 ): Promise<number> {
 	const root = options.root ?? process.cwd();
 	// Before the rc file is imported: whatever it evaluates eagerly — a provider
-	// import, an env read — runs in the test environment, as AdonisJS
-	// `bin/test.ts` sets it before importing anything.
+	// import, an env read — runs in the test environment, as a `bin/test.ts`
+	// sets it before importing anything.
 	enterTestEnvironment(root);
 	const absolute = path.isAbsolute(rcPath)
 		? rcPath

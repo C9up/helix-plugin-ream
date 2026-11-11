@@ -1,5 +1,5 @@
 /**
- * The `apiClient()` helix plugin, in the AdonisJS shape: the plugin puts a
+ * The `apiClient()` helix plugin, in the suite-hook shape: the plugin puts a
  * CLIENT on the test context and the SERVER is started by a suite hook
  * (`testUtils.httpServer().start()`), so a suite that does not declare the hook
  * never starts one. Exercised against a trivial Node server via a mock
@@ -100,7 +100,7 @@ function makeApi() {
 	};
 }
 
-describe("helix plugin > apiClient({ testUtils }) — the AdonisJS shape", () => {
+describe("helix plugin > apiClient({ testUtils }) — the suite-hook shape", () => {
 	it("starts nothing itself; the suite hook owns the server", async () => {
 		const { boot } = makeServer();
 		const testUtils = createTestUtils(boot);

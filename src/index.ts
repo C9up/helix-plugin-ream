@@ -6,7 +6,7 @@
  * client itself (`TestClient`, `createTestClient`) stays in `@c9up/ream/testing`
  * — it drives a Ream server and owes nothing to the runner.
  *
- * The split follows AdonisJS: the plugin puts a CLIENT on the test context, and
+ * The split: the plugin puts a CLIENT on the test context, and
  * the SERVER is started by a suite hook, so a suite that does not declare the
  * hook never starts one.
  *
@@ -57,8 +57,8 @@ export interface ApiClientConfig {
 	/**
 	 * Boot the app directly, for a project that does not split its suites.
 	 *
-	 * A deviation from AdonisJS, where starting the server is always the suite
-	 * hook's job. It exists because the server then starts on the client's FIRST
+	 * Otherwise starting the server is always the suite hook's job. This
+	 * exists because the server then starts on the client's FIRST
 	 * REQUEST rather than at plugin time, so a file that issues none pays
 	 * nothing — the same saving `testUtils` obtains by scoping, without having
 	 * to split the suites first. Prefer `testUtils`; reach for this when the
@@ -119,7 +119,7 @@ export function apiClient(config: ApiClientConfig) {
 	const plugin = async (api: ClientHost): Promise<void> => {
 		if (!config.testUtils && !config.boot) {
 			throw new Error(
-				"[E_NO_SERVER] apiClient() needs either `testUtils` (the AdonisJS shape: " +
+				"[E_NO_SERVER] apiClient() needs either `testUtils` (" +
 					"a suite hook starts the server) or `boot` (the client starts one on its " +
 					"first request). It was given neither, so `ctx.client` would have had " +
 					"nothing to talk to.",
@@ -198,7 +198,7 @@ function clearResolver(read: () => TestClient): void {
  * `runnerHooks` setup has no context to read it from and had to be handed one
  * through a parameter every call site then had to thread. While a test runs it
  * is that test's `ctx.client`; outside one, the client of the file's server —
- * the AdonisJS `services/test_utils` idiom.
+ * the way a `services/test_utils` module is reached from anywhere.
  *
  * Throws when no client is in play, which is a wiring mistake rather than a
  * state to handle.

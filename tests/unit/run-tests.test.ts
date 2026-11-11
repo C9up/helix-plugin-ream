@@ -19,7 +19,7 @@ import {
 
 /**
  * `ream test` — the framework reads its rc file and hands the suites to the
- * runner, the way `@adonisjs/core` reads `adonisrc.ts` and hands them to helix.
+ * runner, helix.
  * These cover the translation ream owns; the execution itself is helix's and is
  * proven there.
  */
