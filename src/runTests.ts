@@ -99,7 +99,7 @@ export interface RunTestsOptions {
 	filters?: TestFilters;
 	/** Timeout for every test, in ms — beats a suite's own and the rc file's. */
 	timeout?: number;
-	/** Extra attempts for every test of a suite that declares none. */
+	/** Extra attempts for every test — beats a suite's own `retries`. */
 	retries?: number;
 	/** Run only the tests that failed during the last run. */
 	failed?: boolean;
@@ -327,9 +327,10 @@ export async function runTests(
 		steps.push({
 			env: {
 				HELIX_SUITE: suite.name,
-				// Empty means unset, so a suite that declares no retries does not
-				// inherit the previous suite's.
-				HELIX_RETRIES: String(suite.retries ?? options.retries ?? ""),
+				// `--retries` beats the suite's own count, as `--timeout` beats its
+				// timeout. Empty means unset, so a suite that declares no retries
+				// does not inherit the previous suite's.
+				HELIX_RETRIES: String(options.retries ?? suite.retries ?? ""),
 			},
 			config: { ...base, files, timeoutMs: options.timeout ?? suite.timeout },
 		});

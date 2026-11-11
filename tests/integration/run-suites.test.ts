@@ -205,4 +205,33 @@ describe("runTests — suites that match files", () => {
 
 		expect(code).toBe(0);
 	}, 60_000);
+
+	it("lets the retries option beat the ones a suite declares", async () => {
+		// `ream test --retries` overrides the configured value, as `--timeout`
+		// does: a suite declaring its own count must not swallow the flag.
+		spec(
+			"tests/retried/a.spec.ts",
+			`test("sees the forwarded retries", (ctx) => {
+         if (ctx.test.options.retries !== 3) throw new Error("retries=" + ctx.test.options.retries)
+       })`,
+		);
+		spec(
+			"tests/plain/b.spec.ts",
+			`test("sees them too", (ctx) => {
+         if (ctx.test.options.retries !== 3) throw new Error("retries=" + ctx.test.options.retries)
+       })`,
+		);
+
+		const code = await runTests(
+			{
+				suites: [
+					{ name: "retried", files: "tests/retried/**/*.spec.ts", retries: 1 },
+					{ name: "plain", files: "tests/plain/**/*.spec.ts" },
+				],
+			},
+			{ root, nodeArgs: nodeArgs(), reporters: ["dot"], retries: 3 },
+		);
+
+		expect(code).toBe(0);
+	}, 60_000);
 });

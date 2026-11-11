@@ -94,7 +94,8 @@ beforeAll(() => {
 	link("@c9up/helix-plugin-ream", pluginRoot);
 	file(
 		"reamrc.ts",
-		'export default { tests: { suites: [{ name: "unit", files: ["tests/unit/**/*.test.ts"] }] } }\n',
+		// `retries: 0` declared, so `--retries` has a configured value to beat.
+		'export default { tests: { suites: [{ name: "unit", files: ["tests/unit/**/*.test.ts"], retries: 0 }] } }\n',
 	);
 	file(
 		"tests/unit/a.test.ts",
@@ -207,7 +208,7 @@ describe.skipIf(!available)("ream test — filters and tuning flags", () => {
 		expect(run.output).toContain("exceeded 100ms timeout");
 	}, 120_000);
 
-	it("--retries gives every test extra attempts", () => {
+	it("--retries gives every test extra attempts, over the suite's own", () => {
 		expect(ream("--files", "flaky").status).toBe(1);
 		expect(ream("--files", "flaky", "--retries", "1").status).toBe(0);
 	}, 120_000);
