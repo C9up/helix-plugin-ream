@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,15 +45,21 @@ function runChild(
 	forceExit: boolean,
 	timeoutMs: number,
 	drainGuard = true,
+	root = mkdtempSync(join(tmpdir(), "ream-forceexit-")),
+	bootstrap?: string,
 ): Promise<{ exited: boolean; code: number | null; stderr: string }> {
-	const root = mkdtempSync(join(tmpdir(), "ream-forceexit-"));
 	dirs.push(root);
+	const tests = {
+		suites: [],
+		forceExit,
+		...(bootstrap === undefined ? {} : { bootstrap }),
+	};
 
 	const script = [
 		`import { runTests } from ${JSON.stringify(runTestsPath)}`,
 		// A handle nothing closes — a DB pool or a server, in a real app.
 		`const handle = setInterval(() => {}, 1000)`,
-		`await runTests({ suites: [], forceExit: ${forceExit} }, { root: ${JSON.stringify(root)}, drainGuard: ${drainGuard}, passWithNoTests: true })`,
+		`await runTests(${JSON.stringify(tests)}, { root: ${JSON.stringify(root)}, drainGuard: ${drainGuard}, passWithNoTests: true })`,
 		// Reached only when the run did NOT force-exit.
 		`console.log('returned')`,
 	].join("\n");
@@ -94,6 +100,27 @@ describe("tests.forceExit", () => {
 
 		expect(outcome.exited).toBe(true);
 		expect(outcome.code).toBe(0);
+	}, 60_000);
+
+	it("runs the global teardown before it leaves", async () => {
+		// `process.exit()` skips a pending `finally`: called inside the run's
+		// `try`, it left the database migrated, the server up and the env
+		// changed on every force-exited run.
+		const root = mkdtempSync(join(tmpdir(), "ream-forceexit-"));
+		const marker = join(root, "teardown.marker");
+		writeFileSync(
+			join(root, "bootstrap.mjs"),
+			[
+				'import { writeFileSync } from "node:fs"',
+				`export const runnerHooks = { teardown: [() => writeFileSync(${JSON.stringify(marker)}, "")] }`,
+			].join("\n"),
+		);
+
+		const outcome = await runChild(true, 45_000, true, root, "bootstrap.mjs");
+
+		expect(outcome.exited).toBe(true);
+		expect(outcome.code).toBe(0);
+		expect(existsSync(marker)).toBe(true);
 	}, 60_000);
 
 	it("without it, the open handle is REPORTED before the process gives up", async () => {

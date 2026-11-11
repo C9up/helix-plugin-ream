@@ -358,37 +358,30 @@ export async function runTests(
 	// migrating once per test file.
 	const dropGlobalHooks = await helix.runGlobalHooks(bootstrap);
 
-	// No suites declared: run whatever the project's discovery finds, so an app
-	// with a plain `tests/` directory works without declaring anything.
-	if (selected.length === 0) {
-		try {
+	// The code is settled inside the `try` and acted on after it: `finish` may
+	// `process.exit()`, which never runs a pending `finally` — the teardown
+	// and every setup undo would be skipped on each force-exited run.
+	let code: number;
+	try {
+		if (selected.length === 0) {
+			// No suites declared: run whatever the project's discovery finds, so
+			// an app with a plain `tests/` directory works without declaring
+			// anything.
 			const outcome = await helix.run(
 				discovered === undefined ? base : { ...base, files: discovered },
 			);
-			return finish(
-				outcome.exitCode,
-				forceExit,
-				drainGuard ? helix.armDrainGuard : undefined,
-			);
-		} finally {
-			await dropGlobalHooks();
+			code = outcome.exitCode;
+		} else {
+			const outcome = await helix.runSuites(steps, base);
+			code =
+				namedSuiteEmpty && !passWithNoTests
+					? Math.max(outcome.exitCode, 1)
+					: outcome.exitCode;
 		}
-	}
-
-	try {
-		const outcome = await helix.runSuites(steps, base);
-		const code =
-			namedSuiteEmpty && !passWithNoTests
-				? Math.max(outcome.exitCode, 1)
-				: outcome.exitCode;
-		return finish(
-			code,
-			forceExit,
-			drainGuard ? helix.armDrainGuard : undefined,
-		);
 	} finally {
 		await dropGlobalHooks();
 	}
+	return finish(code, forceExit, drainGuard ? helix.armDrainGuard : undefined);
 }
 
 /**
