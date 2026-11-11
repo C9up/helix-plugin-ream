@@ -11,7 +11,7 @@ import type { RunnerHook, TestInstance } from "@c9up/helix";
 import { Emitter, Runner, TestContext } from "@c9up/helix";
 import { TestClient } from "@c9up/ream/testing";
 import { createTestUtils } from "@c9up/ream/testing/utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { apiClient, type ClientHost, testClient } from "../../src/index.js";
 
 function makeServer() {
@@ -204,11 +204,20 @@ describe("helix plugin > apiClient({ boot }) — for suites that are not split",
 		expect(client().booted).toBe(false);
 	});
 
-	it("closes cleanly when nothing was ever started", async () => {
-		const boot = async () => ({ port: 1, close: () => {} });
+	it("neither boots nor closes a server at teardown when none was started", async () => {
+		// The teardown must not start a server just to stop it.
+		const close = vi.fn();
+		const boot = vi.fn(async () => ({ port: 1, close }));
 		const { api, teardowns } = makeApi();
 		await apiClient({ boot })(api);
-		await expect(teardowns[0]?.(runner())).resolves.toBeUndefined();
+
+		expect(teardowns).toHaveLength(1);
+		const [teardown] = teardowns;
+		if (teardown === undefined) throw new Error("no teardown registered");
+		await teardown(runner());
+
+		expect(boot).not.toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
 	});
 });
 
