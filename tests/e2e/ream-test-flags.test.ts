@@ -5,8 +5,10 @@
  * the configured values, `--failed` replays the last failures, `--watch`
  * re-runs on a change.
  *
- * Runs only where the workspace provides the pieces: a built `ream` binary and
- * the TypeScript loader it requires. Elsewhere it is skipped.
+ * Not part of `pnpm test`: it needs a built `ream` binary, so it runs on its
+ * own (`pnpm test:e2e`, with `REAM_BIN` naming the binary) in a CI job that
+ * builds one. A missing piece fails the run with its name — never a skip,
+ * which is how this suite once went green on every CI run without running.
  */
 
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
@@ -20,6 +22,7 @@ import {
 	symlinkSync,
 	writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -41,8 +44,13 @@ const helixEntry = existsSync(helixIndex)
 	? pathToFileURL(realpathSync(helixIndex)).href
 	: "";
 
-/** The TS loader `ream test` requires, wherever pnpm put it. */
+/**
+ * The TS loader `ream test` requires: this package's own devDependency, or
+ * the workspace store's in a monorepo checkout installed before it was one.
+ */
 function swcRegister(): string | undefined {
+	const own = path.join(pluginRoot, "node_modules/@swc-node/register");
+	if (existsSync(own)) return realpathSync(own);
 	const store = path.join(workspace, "node_modules/.pnpm");
 	if (!existsSync(store)) return undefined;
 	const entry = readdirSync(store).find((name) =>
@@ -53,13 +61,43 @@ function swcRegister(): string | undefined {
 		: path.join(store, entry, "node_modules/@swc-node/register");
 }
 
-const reflectMetadata = path.join(
-	workspace,
-	"packages/ream/node_modules/reflect-metadata",
-);
+/** The ream this package was installed with: a workspace link or a store copy. */
+const reamLink = path.join(pluginRoot, "node_modules/@c9up/ream");
+const reamRoot = existsSync(reamLink) ? realpathSync(reamLink) : undefined;
+
+/** ream's own `reflect-metadata`, resolved the way ream resolves it. */
+function reflectMetadataRoot(): string | undefined {
+	if (reamRoot === undefined) return undefined;
+	try {
+		return path.dirname(
+			createRequire(path.join(reamRoot, "package.json")).resolve(
+				"reflect-metadata",
+			),
+		);
+	} catch {
+		return undefined;
+	}
+}
+
 const loader = swcRegister();
-const available =
-	existsSync(reamBin) && loader !== undefined && existsSync(reflectMetadata);
+const reflectMetadata = reflectMetadataRoot();
+const reamTsconfig =
+	reamRoot === undefined ? undefined : path.join(reamRoot, "tsconfig.app.json");
+
+/** What this suite cannot run without, named, or nothing when all is there. */
+function missing(): string[] {
+	const absent: string[] = [];
+	if (!existsSync(reamBin))
+		absent.push(`the ream binary (${reamBin}; set REAM_BIN)`);
+	if (helixEntry === "") absent.push(`@c9up/helix (${helixIndex})`);
+	if (loader === undefined) absent.push("@swc-node/register");
+	if (reflectMetadata === undefined)
+		absent.push("reflect-metadata, from @c9up/ream");
+	if (reamTsconfig === undefined || !existsSync(reamTsconfig)) {
+		absent.push("@c9up/ream's tsconfig.app.json");
+	}
+	return absent;
+}
 
 let app: string;
 const running: ChildProcess[] = [];
@@ -79,16 +117,21 @@ function link(name: string, target: string): void {
 const header = `import { expect, test } from ${JSON.stringify(helixEntry)};\n`;
 
 beforeAll(() => {
-	if (!available || loader === undefined) return;
+	const absent = missing();
+	if (
+		absent.length > 0 ||
+		loader === undefined ||
+		reflectMetadata === undefined ||
+		reamTsconfig === undefined
+	) {
+		throw new Error(
+			`ream test end to end cannot run without: ${absent.join(", ")}`,
+		);
+	}
 	app = mkdtempSync(path.join(tmpdir(), "ream-test-flags-"));
 	file("package.json", '{ "name": "flags-fixture", "type": "module" }\n');
 	// The loader resolves `.js` specifiers to `.ts` sources through it.
-	file(
-		"tsconfig.json",
-		JSON.stringify({
-			extends: path.join(workspace, "packages/ream/tsconfig.app.json"),
-		}),
-	);
+	file("tsconfig.json", JSON.stringify({ extends: reamTsconfig }));
 	link("@swc-node/register", loader);
 	link("reflect-metadata", reflectMetadata);
 	link("@c9up/helix-plugin-ream", pluginRoot);
@@ -178,7 +221,7 @@ function ran(output: string): string[] {
 		.map((line) => line.slice(2));
 }
 
-describe.skipIf(!available)("ream test — filters and tuning flags", () => {
+describe("ream test — filters and tuning flags", () => {
 	it("--files narrows the run to the matching files", () => {
 		const run = ream("--files", "tests/unit/a.test.ts");
 		expect(run.status).toBe(0);

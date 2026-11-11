@@ -21,6 +21,7 @@
     "test": "vitest run",
     "lint": "biome check src/ tests/",
     "test:coverage": "vitest run --coverage",
+    "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -29,6 +30,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
+    "@swc-node/register": "^1.12.1",
+    "@swc/core": "^1.16.2",
     "@c9up/helix": "^0.2.13",
     "@c9up/ream": "^0.2.7",
     "@types/node": "^22.20.1",

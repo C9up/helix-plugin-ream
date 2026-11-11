@@ -43,6 +43,33 @@ jobs:
       # if something runs them.
       - run: pnpm test:coverage
 
+  # `ream test` end to end: the real binary parses the filters and tuning flags
+  # and hands them to this package, which has to apply each one to helix. The
+  # binary comes from ream-cli, built here at a pinned tag (the first to
+  # forward every flag); a missing piece fails the suite rather than skipping
+  # it, so this job cannot go green without having run it.
+  e2e:
+    name: ream test, end to end
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/checkout@v6
+        with:
+          repository: C9up/ream-cli
+          ref: v0.3.19
+          path: .ream-cli
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --locked --manifest-path .ream-cli/Cargo.toml
+      - uses: pnpm/action-setup@v6
+        with: { version: 9 }
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - run: pnpm install
+      - run: pnpm test:e2e
+        env:
+          REAM_BIN: ${{ github.workspace }}/.ream-cli/target/debug/ream
+
   # Publish job — gated on workflow_dispatch (manual maintainer trigger).
   # Requires NPM_TOKEN secret + a v<MAJOR>.<MINOR>.<PATCH> tag at HEAD matching
   # package.json. Drift gate refuses to overwrite a published version (or roll
@@ -54,7 +81,7 @@ jobs:
       # Creating the release needs write; the workflow default is read.
       contents: write
     timeout-minutes: 15
-    needs: [build-and-test]
+    needs: [build-and-test, e2e]
     if: github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v6
