@@ -14,7 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { helixEntryPath } from "../helpers/helix-entry.js";
+import { installedEntry } from "../helpers/installed-entry.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const helixBin = path.resolve(
@@ -22,14 +22,19 @@ const helixBin = path.resolve(
 	"../../node_modules/@c9up/helix/bin/helix.js",
 );
 const pluginUrl = pathToFileURL(path.resolve(here, "../../src/index.ts")).href;
-const helixEntry = helixEntryPath(path.resolve(here, "../.."));
-if (helixEntry === undefined) {
-	throw new Error("@c9up/helix is not installed with a root entry");
+const pluginRoot = path.resolve(here, "../..");
+
+/** An installed export's file URL; a missing one fails the suite by name. */
+function entryUrl(name: string, subpath = "."): string {
+	const entry = installedEntry(pluginRoot, name, subpath);
+	if (entry === undefined) {
+		throw new Error(`${name} is not installed with its "${subpath}" export`);
+	}
+	return pathToFileURL(entry).href;
 }
-const helixUrl = pathToFileURL(helixEntry).href;
-const utilsUrl = pathToFileURL(
-	path.resolve(here, "../../node_modules/@c9up/ream/src/testing/testUtils.ts"),
-).href;
+
+const helixUrl = entryUrl("@c9up/helix");
+const utilsUrl = entryUrl("@c9up/ream", "./testing/utils");
 
 const roots: string[] = [];
 

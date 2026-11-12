@@ -27,7 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { helixEntryPath } from "../helpers/helix-entry.js";
+import { installedEntry } from "../helpers/installed-entry.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(here, "../..");
@@ -37,7 +37,7 @@ const reamBin =
 	path.join(workspace, "packages/ream-cli/target/debug/ream");
 // The real path: the plugin reaches helix through it, and one module instance
 // is what lets the tests register where the runner looks.
-const helixIndex = helixEntryPath(pluginRoot);
+const helixIndex = installedEntry(pluginRoot, "@c9up/helix");
 const helixEntry =
 	helixIndex === undefined ? "" : pathToFileURL(helixIndex).href;
 
