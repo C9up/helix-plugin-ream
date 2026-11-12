@@ -14,6 +14,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
+import { helixEntryPath } from "../helpers/helix-entry.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const helixBin = path.resolve(
@@ -21,9 +22,11 @@ const helixBin = path.resolve(
 	"../../node_modules/@c9up/helix/bin/helix.js",
 );
 const pluginUrl = pathToFileURL(path.resolve(here, "../../src/index.ts")).href;
-const helixUrl = pathToFileURL(
-	path.resolve(here, "../../node_modules/@c9up/helix/src/index.ts"),
-).href;
+const helixEntry = helixEntryPath(path.resolve(here, "../.."));
+if (helixEntry === undefined) {
+	throw new Error("@c9up/helix is not installed with a root entry");
+}
+const helixUrl = pathToFileURL(helixEntry).href;
 const utilsUrl = pathToFileURL(
 	path.resolve(here, "../../node_modules/@c9up/ream/src/testing/testUtils.ts"),
 ).href;

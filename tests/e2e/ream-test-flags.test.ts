@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { helixEntryPath } from "../helpers/helix-entry.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pluginRoot = path.resolve(here, "../..");
@@ -36,13 +37,9 @@ const reamBin =
 	path.join(workspace, "packages/ream-cli/target/debug/ream");
 // The real path: the plugin reaches helix through it, and one module instance
 // is what lets the tests register where the runner looks.
-const helixIndex = path.join(
-	pluginRoot,
-	"node_modules/@c9up/helix/src/index.ts",
-);
-const helixEntry = existsSync(helixIndex)
-	? pathToFileURL(realpathSync(helixIndex)).href
-	: "";
+const helixIndex = helixEntryPath(pluginRoot);
+const helixEntry =
+	helixIndex === undefined ? "" : pathToFileURL(helixIndex).href;
 
 /**
  * The TS loader `ream test` requires: this package's own devDependency, or
@@ -89,7 +86,8 @@ function missing(): string[] {
 	const absent: string[] = [];
 	if (!existsSync(reamBin))
 		absent.push(`the ream binary (${reamBin}; set REAM_BIN)`);
-	if (helixEntry === "") absent.push(`@c9up/helix (${helixIndex})`);
+	if (helixEntry === "")
+		absent.push("@c9up/helix, installed with its root entry");
 	if (loader === undefined) absent.push("@swc-node/register");
 	if (reflectMetadata === undefined)
 		absent.push("reflect-metadata, from @c9up/ream");
