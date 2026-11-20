@@ -193,7 +193,7 @@ export async function runTests(
 	options: RunTestsOptions = {},
 ): Promise<number> {
 	const root = options.root ?? process.cwd();
-	enterTestEnvironment(root);
+	await enterTestEnvironment(root);
 	const declared = tests?.suites ?? [];
 	const filters = options.filters ?? {};
 	const asked = [
@@ -388,11 +388,16 @@ export async function runTests(
  * Idempotent: an existing key is never overwritten, so a second call changes
  * nothing.
  */
-function enterTestEnvironment(root: string): void {
+async function enterTestEnvironment(root: string): Promise<void> {
 	process.env.NODE_ENV = "test";
 	// Skipping `.env.local` is deliberate (and what the Ignitor does for the test
 	// environment): a developer's local overrides must not decide what CI runs.
-	loadEnvFiles(pathToFileURL(`${root}${path.sep}`), { skipEnvLocal: true });
+	// Awaited: the loader resolves `file:` identifiers and references, so a
+	// failure (a missing secret file, a bad ENV_PATH) is a rejection, which
+	// must stop the run rather than surface as an unhandled one.
+	await loadEnvFiles(pathToFileURL(`${root}${path.sep}`), {
+		skipEnvLocal: true,
+	});
 }
 
 /**
@@ -433,7 +438,7 @@ export async function runTestsFromRcFile(
 	// Before the rc file is imported: whatever it evaluates eagerly — a provider
 	// import, an env read — runs in the test environment, as a `bin/test.ts`
 	// sets it before importing anything.
-	enterTestEnvironment(root);
+	await enterTestEnvironment(root);
 	const absolute = path.isAbsolute(rcPath)
 		? rcPath
 		: path.resolve(root, rcPath);
