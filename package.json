@@ -29,7 +29,7 @@
     "@c9up/ream": "^0.2.7"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.12",
+    "@biomejs/biome": "^2.6.8",
     "@swc-node/register": "^1.12.1",
     "@swc/core": "^1.16.2",
     "@c9up/helix": "^0.2.13",
