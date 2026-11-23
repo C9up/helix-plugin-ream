@@ -24,6 +24,9 @@ beforeEach(() => {
 	savedNodeEnv = process.env.NODE_ENV;
 	root = mkdtempSync(join(tmpdir(), "ream-suites-"));
 	dirs.push(root);
+	// An ES module project, as a ream app is: loaded as CommonJS, helix's
+	// workspace sources cannot import @c9up/flare (import-only exports).
+	writeFileSync(join(root, "package.json"), '{"type":"module"}\n');
 });
 
 afterEach(() => {

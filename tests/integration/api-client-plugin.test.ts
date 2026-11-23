@@ -111,7 +111,11 @@ describe("helix plugin > apiClient({ testUtils }) — the suite-hook shape", () 
 		// The plugin has run and no server exists — that is the point of the
 		// shape: a unit suite declares no hook and pays nothing.
 		expect(testUtils.client()).toBeUndefined();
-		expect(() => client()).toThrowError(/E_SERVER_NOT_STARTED/);
+		expect(() => client()).toThrowError(
+			expect.objectContaining({
+				code: "E_HELIX_PLUGIN_REAM_SERVER_NOT_STARTED",
+			}),
+		);
 
 		// The suite's setup hook starts it, and hands back its own teardown.
 		const stop = await testUtils.httpServer().start();
@@ -224,7 +228,9 @@ describe("helix plugin > apiClient({ boot }) — for suites that are not split",
 describe("helix plugin > apiClient() with neither", () => {
 	it("refuses at plugin time instead of at the first request", async () => {
 		const { api } = makeApi();
-		await expect(apiClient({})(api)).rejects.toThrowError(/E_NO_SERVER/);
+		await expect(apiClient({})(api)).rejects.toMatchObject({
+			code: "E_HELIX_PLUGIN_REAM_NO_SERVER",
+		});
 	});
 });
 
@@ -248,7 +254,9 @@ describe("helix plugin > testClient()", () => {
 		await teardowns[0]?.(runner());
 		// The teardown forgets it, so a later read reports the wiring gap rather
 		// than handing back a client whose server is gone.
-		expect(() => testClient()).toThrowError(/E_NO_TEST_CLIENT/);
+		expect(() => testClient()).toThrowError(
+			expect.objectContaining({ code: "E_HELIX_PLUGIN_REAM_NO_TEST_CLIENT" }),
+		);
 		await stop();
 	});
 });

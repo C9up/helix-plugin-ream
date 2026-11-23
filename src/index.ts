@@ -44,6 +44,13 @@ import { getActiveTest, type Plugin, type PluginApi } from "@c9up/helix";
 import type { AuthStrategy, RouteManifest } from "@c9up/ream/testing";
 import { TestClient } from "@c9up/ream/testing";
 import type { BootServer, TestUtils } from "@c9up/ream/testing/utils";
+import {
+	E_HELIX_PLUGIN_REAM_NO_SERVER,
+	E_HELIX_PLUGIN_REAM_NO_TEST_CLIENT,
+	E_HELIX_PLUGIN_REAM_SERVER_NOT_STARTED,
+} from "./errors.js";
+
+export * as errors from "./errors.js";
 
 /** The slice of helix's `PluginApi` this plugin actually uses. */
 export type ClientHost = Pick<PluginApi, "context" | "cleanup">;
@@ -118,12 +125,7 @@ class TestClientView extends TestClient {
 export function apiClient(config: ApiClientConfig) {
 	const plugin = async (api: ClientHost): Promise<void> => {
 		if (!config.testUtils && !config.boot) {
-			throw new Error(
-				"[E_NO_SERVER] apiClient() needs either `testUtils` (" +
-					"a suite hook starts the server) or `boot` (the client starts one on its " +
-					"first request). It was given neither, so `ctx.client` would have had " +
-					"nothing to talk to.",
-			);
+			throw new E_HELIX_PLUGIN_REAM_NO_SERVER();
 		}
 
 		// Resolved per access, not once: with `testUtils` the server does not
@@ -138,15 +140,7 @@ export function apiClient(config: ApiClientConfig) {
 		const read = (): TestClient => {
 			const client = owned ?? config.testUtils?.client();
 			if (!client) {
-				throw new Error(
-					"[E_SERVER_NOT_STARTED] No server is running for this suite. Add the " +
-						"hook that starts it:\n" +
-						"  configureSuite(suite) {\n" +
-						"    if (suite.name === 'functional') {\n" +
-						"      return suite.setup(() => testUtils.httpServer().start())\n" +
-						"    }\n" +
-						"  }",
-				);
+				throw new E_HELIX_PLUGIN_REAM_SERVER_NOT_STARTED();
 			}
 			return client;
 		};
@@ -205,12 +199,7 @@ function clearResolver(read: () => TestClient): void {
  */
 export function testClient(): TestClient {
 	if (!resolve) {
-		throw new Error(
-			"[E_NO_TEST_CLIENT] No client is in play. Add `apiClient()` to the plugins " +
-				"in tests/bootstrap.ts, and — with the `testUtils` shape — make sure the " +
-				"suite's setup hook has started the server. This reads the client of the " +
-				"CURRENT process.",
-		);
+		throw new E_HELIX_PLUGIN_REAM_NO_TEST_CLIENT();
 	}
 	const context = getActiveTest()?.context;
 	const current =

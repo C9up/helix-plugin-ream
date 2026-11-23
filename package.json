@@ -28,6 +28,9 @@
     "@c9up/helix": "^0.2.13",
     "@c9up/ream": "^0.2.7"
   },
+  "dependencies": {
+    "@c9up/flare": "^0.1.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.6.8",
     "@swc-node/register": "^1.12.1",

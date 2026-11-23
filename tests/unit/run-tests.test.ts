@@ -10,10 +10,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+	errors,
 	runTests,
 	runTestsFromRcFile,
-	SuiteConfigureUnreachableError,
-	UnknownSuiteError,
 	workerNodeArgs,
 } from "../../src/runTests.js";
 
@@ -101,11 +100,14 @@ describe("runTests", () => {
 				{ suites: [emptySuite, { name: "e2e", files: "x" }] },
 				{ root, suites: ["nope"] },
 			),
-		).rejects.toThrow(UnknownSuiteError);
+		).rejects.toThrow(errors.E_HELIX_PLUGIN_REAM_UNKNOWN_SUITE);
 
 		await expect(
 			runTests({ suites: [emptySuite] }, { root, suites: ["nope"] }),
-		).rejects.toThrow(/Declared: unit\./);
+		).rejects.toMatchObject({
+			code: "E_HELIX_PLUGIN_REAM_UNKNOWN_SUITE",
+			message: expect.stringMatching(/Declared: unit\./),
+		});
 	});
 
 	it("says so when the rc file declares no suite at all", async () => {
@@ -203,11 +205,14 @@ describe("runTests", () => {
 		// green suite configured differently from what the rc file says.
 		await expect(
 			runTests({ suites: [{ ...emptySuite, configure: () => {} }] }, { root }),
-		).rejects.toThrow(SuiteConfigureUnreachableError);
+		).rejects.toThrow(errors.E_HELIX_PLUGIN_REAM_SUITE_CONFIGURE_UNREACHABLE);
 
 		await expect(
 			runTests({ suites: [{ ...emptySuite, configure: () => {} }] }, { root }),
-		).rejects.toThrow(/runTestsFromRcFile/);
+		).rejects.toMatchObject({
+			code: "E_HELIX_PLUGIN_REAM_SUITE_CONFIGURE_UNREACHABLE",
+			message: expect.stringMatching(/runTestsFromRcFile/),
+		});
 	});
 
 	it("names every suite whose configure it cannot deliver", async () => {

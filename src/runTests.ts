@@ -24,6 +24,12 @@ import { pathToFileURL } from "node:url";
 import type { RunConfig } from "@c9up/helix/runner";
 import type { TestSuiteConfig, TestsConfig } from "@c9up/ream";
 import { loadEnvFiles } from "@c9up/ream/env";
+import {
+	E_HELIX_PLUGIN_REAM_SUITE_CONFIGURE_UNREACHABLE,
+	E_HELIX_PLUGIN_REAM_UNKNOWN_SUITE,
+} from "./errors.js";
+
+export * as errors from "./errors.js";
 
 /**
  * helix's coverage options, read off the run config rather than imported by
@@ -119,38 +125,6 @@ export interface TestFilters {
 	tests?: string[];
 }
 
-/** A suite name that was asked for but is not declared. */
-export class UnknownSuiteError extends Error {
-	constructor(name: string, declared: string[]) {
-		super(
-			declared.length === 0
-				? `Unknown test suite "${name}": the rc file declares none.`
-				: `Unknown test suite "${name}". Declared: ${declared.join(", ")}.`,
-		);
-		this.name = "UnknownSuiteError";
-	}
-}
-
-/**
- * A suite declares `configure`, but this entry point cannot deliver it.
- *
- * Not a warning: helix runs a declared `configure`, so carrying on would run the
- * suite in a state its own config does not describe — and a warning is exactly
- * what gets scrolled past in CI.
- */
-export class SuiteConfigureUnreachableError extends Error {
-	constructor(names: string[]) {
-		const plural = names.length > 1;
-		super(
-			`Suite${plural ? "s" : ""} ${names.map((name) => `"${name}"`).join(", ")} ` +
-				`declare${plural ? "" : "s"} \`configure\`, which has to be re-imported in each ` +
-				"worker and therefore needs the rc file PATH, not the object it exported. " +
-				"Call runTestsFromRcFile(), or pass `configModule`.",
-		);
-		this.name = "SuiteConfigureUnreachableError";
-	}
-}
-
 /**
  * The flags the worker processes are spawned with.
  *
@@ -171,7 +145,13 @@ function select(
 	return asked.map((name) => {
 		const suite = byName.get(name);
 		if (suite === undefined) {
-			throw new UnknownSuiteError(name, [...byName.keys()]);
+			const known = [...byName.keys()];
+			throw new E_HELIX_PLUGIN_REAM_UNKNOWN_SUITE([
+				name,
+				known.length === 0
+					? ": the rc file declares none."
+					: `. Declared: ${known.join(", ")}.`,
+			]);
 		}
 		return suite;
 	});
@@ -225,10 +205,16 @@ export async function runTests(
 		// In helix a declared `configure` RUNS. It cannot here — the callback needs
 		// the module's path to be re-imported in each worker, and this entry was
 		// handed the exported object. Running anyway would produce a green suite
-		// configured differently from what the rc file says, so the run stops.
-		throw new SuiteConfigureUnreachableError(
-			configuring.map((suite) => suite.name),
-		);
+		// configured differently from what the rc file says, so the run stops: an
+		// error, not a warning, which is what gets scrolled past in CI.
+		const names = configuring.map((suite) => suite.name);
+		const plural = names.length > 1;
+		throw new E_HELIX_PLUGIN_REAM_SUITE_CONFIGURE_UNREACHABLE([
+			`Suite${plural ? "s" : ""} ${names.map((suite) => `"${suite}"`).join(", ")} ` +
+				`declare${plural ? "" : "s"} \`configure\`, which has to be re-imported in each ` +
+				"worker and therefore needs the rc file PATH, not the object it exported. " +
+				"Call runTestsFromRcFile(), or pass `configModule`.",
+		]);
 	}
 	process.env.HELIX_SUITE_CONFIG =
 		configuring.length > 0 && options.configModule !== undefined
